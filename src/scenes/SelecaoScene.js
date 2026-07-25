@@ -115,7 +115,7 @@ class SelecaoScene extends Phaser.Scene {
         botaoConfirmar.on('pointerdown', () => {
             JogoState.corJogador = marcaSelecionada.cor;
             JogoState.marcaJogador = marcaSelecionada.nome;
-            this.scene.start('CorridaScene');
+            this.scene.start('SelecaoPistaScene');
         });
 
         // ---------- botão voltar ----------

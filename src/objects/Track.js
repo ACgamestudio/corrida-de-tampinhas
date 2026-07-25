@@ -1,10 +1,19 @@
-// ---------- Pista grande: geometria, colisão e zonas especiais ----------
-// A pista é um anel entre uma borda externa e uma "ilha" central, com raio variável
-// por ângulo (várias harmônicas de seno) — isso cria muitas curvas, retas e "esses",
-// como uma pista de giz bem comprida desenhada de verdade num quintal grande.
+// ---------- Pista grande: traçado por spline, colisão e zonas especiais ----------
+// A pista é definida por um pequeno conjunto de pontos de controle (o "traçado"), ligados
+// por uma curva de Catmull-Rom fechada — isso garante curvas contínuas e suaves, sem trechos
+// quebrados/pontiagudos. A partir dessa linha central, a pista é uma faixa de LARGURA UNIFORME
+// (deslocada pra fora e pra dentro, perpendicular à direção da pista em cada ponto).
+//
+// Tudo — física, IA, detecção de dentro/fora — usa a mesma LUT (lookup table) de amostras da
+// pista, indexada por "s" (distância percorrida ao longo do traçado, em pixels), em vez de
+// ângulo a partir de um centro. Isso é o que permite curvas de verdade (não só uma oval).
 
 const MUNDO_LARGURA = 3000;
 const MUNDO_ALTURA = 2400;
+
+const LARGURA_PISTA = 300;         // uniforme em toda a pista (~30% maior que a versão anterior)
+const RESOLUCAO_LUT = 900;         // amostras ao redor da volta inteira
+const COR_PISTA = 0x97856a;        // tom parecido com o chão da foto de fundo, pra não conflitar
 
 function pontoNaElipse(cx, cy, raioX, raioY, angulo) {
     return {
@@ -13,26 +22,117 @@ function pontoNaElipse(cx, cy, raioX, raioY, angulo) {
     };
 }
 
-// devolve a definição completa da pista (centro + funções de raio por ângulo)
-function construirPista() {
+// Catmull-Rom uniforme (tensão padrão), fechada: t contínuo em [0, pontos.length)
+function catmullRomPonto(pontos, t) {
+    const n = pontos.length;
+    const i = Math.floor(t) % n;
+    const u = t - Math.floor(t);
+
+    const pm1 = pontos[(i - 1 + n) % n];
+    const p0 = pontos[i];
+    const p1 = pontos[(i + 1) % n];
+    const p2 = pontos[(i + 2) % n];
+
+    const u2 = u * u, u3 = u2 * u;
+
+    const x = 0.5 * ((2 * p0.x) + (-pm1.x + p1.x) * u
+        + (2 * pm1.x - 5 * p0.x + 4 * p1.x - p2.x) * u2
+        + (-pm1.x + 3 * p0.x - 3 * p1.x + p2.x) * u3);
+    const y = 0.5 * ((2 * p0.y) + (-pm1.y + p1.y) * u
+        + (2 * pm1.y - 5 * p0.y + 4 * p1.y - p2.y) * u2
+        + (-pm1.y + 3 * p0.y - 3 * p1.y + p2.y) * u3);
+
+    return { x, y };
+}
+
+// monta os pontos de controle do traçado — uma volta grande com retas e curvas largas,
+// amplitude calibrada (testada numericamente) pra nunca formar curva mais fechada do que a
+// largura da pista permite, então nunca "pincha" nem se autointersecta.
+function gerarPontosDeControle() {
+    const N = 16;
     const centro = { x: MUNDO_LARGURA / 2, y: MUNDO_ALTURA / 2 - 50 };
-    const LARGURA_X = 200;
-    const LARGURA_Y = 145;
+    const pontos = [];
+    for (let i = 0; i < N; i++) {
+        const a = i * (Math.PI * 2 / N);
+        const rx = 1000 + 90 * Math.sin(2 * a + 0.4) + 25 * Math.sin(3 * a - 0.9);
+        const ry = 780 + 75 * Math.sin(2 * a - 0.3) + 20 * Math.sin(3 * a + 1.2);
+        pontos.push({ x: centro.x + Math.cos(a) * rx, y: centro.y + Math.sin(a) * ry });
+    }
+    return { pontos, centro };
+}
 
-    const raioXExt = (a) => 1000
-        + 170 * Math.sin(2 * a + 0.4)
-        + 90 * Math.sin(5 * a - 0.8)
-        + 45 * Math.sin(9 * a + 1.3);
+// constrói a pista inteira: traçado + LUT de amostras (posição, tangente, comprimento
+// acumulado "s", normal) + pontos das bordas externa/interna (largura uniforme)
+function construirPista() {
+    const { pontos, centro } = gerarPontosDeControle();
+    const n = pontos.length;
 
-    const raioYExt = (a) => 760
-        + 130 * Math.sin(3 * a - 0.3)
-        + 65 * Math.sin(6 * a + 1.1)
-        + 35 * Math.sin(11 * a + 0.6);
+    const brutos = [];
+    for (let i = 0; i < RESOLUCAO_LUT; i++) {
+        const t = (i / RESOLUCAO_LUT) * n;
+        brutos.push(catmullRomPonto(pontos, t));
+    }
 
-    const raioXInt = (a) => raioXExt(a) - LARGURA_X;
-    const raioYInt = (a) => raioYExt(a) - LARGURA_Y;
+    // tangente por diferença central, comprimento acumulado, normal (perpendicular, pra fora)
+    const lut = [];
+    let s = 0;
+    for (let i = 0; i < RESOLUCAO_LUT; i++) {
+        const anterior = brutos[(i - 1 + RESOLUCAO_LUT) % RESOLUCAO_LUT];
+        const proximo = brutos[(i + 1) % RESOLUCAO_LUT];
+        const tangente = Math.atan2(proximo.y - anterior.y, proximo.x - anterior.x);
 
-    return { centro, raioXExt, raioYExt, raioXInt, raioYInt, larguraX: LARGURA_X, larguraY: LARGURA_Y };
+        if (i > 0) {
+            s += Phaser.Math.Distance.Between(brutos[i - 1].x, brutos[i - 1].y, brutos[i].x, brutos[i].y);
+        }
+
+        // normal apontando pra fora do laço (testado/corrigido logo abaixo, uma vez, pro
+        // primeiro ponto — como o traçado é uma curva suave e não se autointersecta, a
+        // orientação relativa se mantém em toda a volta)
+        let nx = -Math.sin(tangente), ny = Math.cos(tangente);
+
+        lut.push({ x: brutos[i].x, y: brutos[i].y, tangente, nx, ny, s });
+    }
+    const comprimentoTotal = s + Phaser.Math.Distance.Between(
+        brutos[RESOLUCAO_LUT - 1].x, brutos[RESOLUCAO_LUT - 1].y, brutos[0].x, brutos[0].y
+    );
+
+    // garante que a normal aponta pra fora (se não, inverte todas de uma vez)
+    const primeiro = lut[0];
+    const paraFora = { x: primeiro.x - centro.x, y: primeiro.y - centro.y };
+    if (primeiro.nx * paraFora.x + primeiro.ny * paraFora.y < 0) {
+        lut.forEach(p => { p.nx *= -1; p.ny *= -1; });
+    }
+
+    const meiaLargura = LARGURA_PISTA / 2;
+    lut.forEach(p => {
+        p.extX = p.x + p.nx * meiaLargura; p.extY = p.y + p.ny * meiaLargura;
+        p.intX = p.x - p.nx * meiaLargura; p.intY = p.y - p.ny * meiaLargura;
+    });
+
+    const pista = {
+        centro, lut, comprimentoTotal, largura: LARGURA_PISTA,
+
+        // amostra mais próxima de uma coordenada s (com wraparound)
+        indiceParaS(sAlvo) {
+            let sN = sAlvo % comprimentoTotal;
+            if (sN < 0) sN += comprimentoTotal;
+            return Math.round((sN / comprimentoTotal) * RESOLUCAO_LUT) % RESOLUCAO_LUT;
+        },
+
+        amostraEmS(sAlvo) {
+            return lut[this.indiceParaS(sAlvo)];
+        },
+
+        // ponto na faixa da pista: fracaoLargura 0 = borda interna (ilha), 1 = borda externa
+        pontoNaFaixa(sAlvo, fracaoLargura) {
+            const p = this.amostraEmS(sAlvo);
+            return {
+                x: Phaser.Math.Linear(p.intX, p.extX, fracaoLargura),
+                y: Phaser.Math.Linear(p.intY, p.extY, fracaoLargura)
+            };
+        }
+    };
+    return pista;
 }
 
 // mantém um ângulo dentro de [-π, π]
@@ -42,129 +142,121 @@ function normalizarAngulo(a) {
     return a;
 }
 
-// verifica se um ponto (x,y) está dentro do anel da pista naquele ângulo específico
-function calcularStatusNaPista(pista, x, y) {
-    const dx = x - pista.centro.x;
-    const dy = y - pista.centro.y;
-    const theta = Math.atan2(dy, dx);
-
-    const rx = pista.raioXExt(theta), ry = pista.raioYExt(theta);
-    const rxi = pista.raioXInt(theta), ryi = pista.raioYInt(theta);
-
-    const nExt = Math.sqrt((dx / rx) ** 2 + (dy / ry) ** 2);
-    const nInt = Math.sqrt((dx / rxi) ** 2 + (dy / ryi) ** 2);
-
-    return { theta, nExt, nInt, dentro: nExt <= 1.03 && nInt >= 0.97 };
+// menor distância entre duas posições "s" ao longo da pista, considerando o laço fechado
+function diferencaS(sA, sB, comprimentoTotal) {
+    let d = sA - sB;
+    const metade = comprimentoTotal / 2;
+    if (d > metade) d -= comprimentoTotal;
+    if (d < -metade) d += comprimentoTotal;
+    return d;
 }
 
-// desenha a pista riscada de giz: fundo tingido do anel + contornos irregulares + linha de chegada
+// status de um ponto (x,y) em relação à pista: posição ao longo do traçado (s), distância
+// lateral ao centro da faixa (negativa = lado da ilha, positiva = lado externo) e se está
+// dentro da faixa.
+function calcularStatusNaPista(pista, x, y) {
+    // busca no LUT: varredura completa (barato — poucas centenas de amostras, poucos objetos)
+    let melhorIdx = 0, melhorDist = Infinity;
+    const { lut } = pista;
+    for (let i = 0; i < lut.length; i++) {
+        const dx = x - lut[i].x, dy = y - lut[i].y;
+        const d = dx * dx + dy * dy;
+        if (d < melhorDist) { melhorDist = d; melhorIdx = i; }
+    }
+
+    const amostra = lut[melhorIdx];
+    const dx = x - amostra.x, dy = y - amostra.y;
+    const lateral = dx * amostra.nx + dy * amostra.ny; // projeção na normal
+
+    const meiaLargura = pista.largura / 2;
+    return {
+        s: amostra.s,
+        indice: melhorIdx,
+        lateral,
+        tangente: amostra.tangente,
+        nx: amostra.nx,
+        ny: amostra.ny,
+        dentro: Math.abs(lateral) <= meiaLargura,
+        alemDaBorda: Math.abs(lateral) - meiaLargura // positivo = quanto passou da borda
+    };
+}
+
+// desenha a pista riscada de giz: fundo tingido da faixa + contornos irregulares + linha de
+// chegada + placas de progresso
 function desenharPista(scene, pista) {
-    const { centro } = pista;
-    const passos = 360;
+    const { lut, comprimentoTotal } = pista;
 
+    // pinta o anel da pista (onde a corrida acontece) com uma cor sólida parecida com o chão
+    // da foto de fundo — desenhado em pequenos quadriláteros ao longo de toda a volta, o que
+    // deixa um "buraco" natural na ilha central e do lado de fora, onde a foto continua visível
     const fundo = scene.add.graphics();
-    fundo.fillStyle(0xffffff, 0.05);
-    const pontosExt = [];
-    for (let i = 0; i <= passos; i++) {
-        const angulo = (Math.PI * 2 / passos) * i;
-        pontosExt.push(pontoNaElipse(centro.x, centro.y, pista.raioXExt(angulo), pista.raioYExt(angulo), angulo));
+    fundo.fillStyle(COR_PISTA, 1);
+    for (let i = 0; i < lut.length; i++) {
+        const a = lut[i], b = lut[(i + 1) % lut.length];
+        fundo.fillPoints([
+            { x: a.extX, y: a.extY }, { x: b.extX, y: b.extY },
+            { x: b.intX, y: b.intY }, { x: a.intX, y: a.intY }
+        ], true);
     }
-    fundo.fillPoints(pontosExt, true);
 
-    fundo.fillStyle(0x000000, 0.12);
-    const pontosInt = [];
-    for (let i = 0; i <= passos; i++) {
-        const angulo = (Math.PI * 2 / passos) * i;
-        pontosInt.push(pontoNaElipse(centro.x, centro.y, pista.raioXInt(angulo), pista.raioYInt(angulo), angulo));
-    }
-    fundo.fillPoints(pontosInt, true);
-
-    const contorno = (raioXFn, raioYFn) => {
+    const contorno = (chave) => {
         const g = scene.add.graphics();
         g.lineStyle(5, 0xffffff, 0.85);
         g.beginPath();
-        for (let i = 0; i <= passos; i++) {
-            const angulo = (Math.PI * 2 / passos) * i;
-            const p = pontoNaElipse(centro.x, centro.y, raioXFn(angulo), raioYFn(angulo), angulo);
-            const jx = p.x + Phaser.Math.Between(-3, 3);
-            const jy = p.y + Phaser.Math.Between(-3, 3);
+        lut.forEach((p, i) => {
+            const jx = p[chave + 'X'] + Phaser.Math.Between(-3, 3);
+            const jy = p[chave + 'Y'] + Phaser.Math.Between(-3, 3);
             if (i === 0) g.moveTo(jx, jy); else g.lineTo(jx, jy);
-        }
+        });
+        g.closePath();
         g.strokePath();
     };
+    contorno('ext');
+    contorno('int');
 
-    contorno(pista.raioXExt, pista.raioYExt);
-    contorno(pista.raioXInt, pista.raioYInt);
-
-    // linha de chegada — risco perpendicular à pista, no ângulo 0
-    const externo = pontoNaElipse(centro.x, centro.y, pista.raioXExt(0), pista.raioYExt(0), 0);
-    const interno = pontoNaElipse(centro.x, centro.y, pista.raioXInt(0), pista.raioYInt(0), 0);
+    // linha de chegada — risco perpendicular à pista, em s = 0
+    const largada = pista.amostraEmS(0);
     const segmentos = 10;
     for (let i = 0; i < segmentos; i++) {
-        const t0 = i / segmentos;
-        const t1 = (i + 1) / segmentos;
-        const x0 = Phaser.Math.Linear(interno.x, externo.x, t0);
-        const y0 = Phaser.Math.Linear(interno.y, externo.y, t0);
-        const x1 = Phaser.Math.Linear(interno.x, externo.x, t1);
-        const y1 = Phaser.Math.Linear(interno.y, externo.y, t1);
+        const t0 = i / segmentos, t1 = (i + 1) / segmentos;
+        const x0 = Phaser.Math.Linear(largada.intX, largada.extX, t0);
+        const y0 = Phaser.Math.Linear(largada.intY, largada.extY, t0);
+        const x1 = Phaser.Math.Linear(largada.intX, largada.extX, t1);
+        const y1 = Phaser.Math.Linear(largada.intY, largada.extY, t1);
         const g = scene.add.graphics();
         g.lineStyle(8, i % 2 === 0 ? 0x000000 : 0xffffff, 0.9);
         g.lineBetween(x0, y0, x1, y1);
     }
 
-    // placas de "faixa" a cada 90° pra ajudar a se localizar numa pista tão grande
+    // placas de progresso a cada 1/4 de volta
     const marcos = ['LARGADA', '1/4 DA VOLTA', 'METADE DA VOLTA', '3/4 DA VOLTA'];
-    for (let i = 0; i < 4; i++) {
-        if (i === 0) continue; // a largada já tem a faixa quadriculada
-        const angulo = (Math.PI / 2) * i;
-        const pExt = pontoNaElipse(centro.x, centro.y, pista.raioXExt(angulo) + 60, pista.raioYExt(angulo) + 60, angulo);
-        scene.add.text(pExt.x, pExt.y, marcos[i], {
-            fontSize: '16px',
-            fontFamily: 'Arial',
-            fontStyle: 'bold',
-            color: '#ffffff',
-            backgroundColor: '#00000055',
-            padding: { x: 6, y: 3 }
+    for (let i = 1; i < 4; i++) {
+        const amostra = pista.amostraEmS(comprimentoTotal * (i / 4));
+        const px = amostra.x + amostra.nx * (pista.largura / 2 + 60);
+        const py = amostra.y + amostra.ny * (pista.largura / 2 + 60);
+        scene.add.text(px, py, marcos[i], {
+            fontSize: '16px', fontFamily: 'Arial', fontStyle: 'bold',
+            color: '#ffffff', backgroundColor: '#00000055', padding: { x: 6, y: 3 }
         }).setOrigin(0.5).setAlpha(0.8);
     }
 }
 
-// cria as paredes físicas (invisíveis) que seguem o contorno externo e interno da pista
-function criarParedesPista(scene, pista) {
-    const paredes = scene.physics.add.staticGroup();
-
-    const criarParedeCurva = (raioXFn, raioYFn, quantidade, raioColisor) => {
-        for (let i = 0; i < quantidade; i++) {
-            const angulo = (Math.PI * 2 / quantidade) * i;
-            const p = pontoNaElipse(pista.centro.x, pista.centro.y, raioXFn(angulo), raioYFn(angulo), angulo);
-            const bloco = scene.add.circle(p.x, p.y, raioColisor, 0xffffff, 0);
-            scene.physics.add.existing(bloco, true);
-            bloco.body.setCircle(raioColisor);
-            paredes.add(bloco);
-        }
-    };
-
-    criarParedeCurva(pista.raioXExt, pista.raioYExt, 380, 24);
-    criarParedeCurva(pista.raioXInt, pista.raioYInt, 260, 20);
-
-    return paredes;
-}
-
-// desenha uma zona especial (poça d'água ou grama/areia) que atravessa a pista numa faixa angular
+// desenha uma zona especial (poça d'água ou grama/areia) que atravessa a pista numa faixa
+// definida por posição ao longo do traçado (s), não mais por ângulo
 function desenharZonaEspecial(scene, pista, zona, cor, alpha) {
-    const { centro } = pista;
-    const passos = 20;
-
+    const passos = 16;
     const g = scene.add.graphics();
     g.fillStyle(cor, alpha);
     const pontos = [];
     for (let i = 0; i <= passos; i++) {
-        const a = zona.angulo - zona.meiaLargura + (2 * zona.meiaLargura) * (i / passos);
-        pontos.push(pontoNaElipse(centro.x, centro.y, pista.raioXExt(a), pista.raioYExt(a), a));
+        const s = zona.sCentro - zona.meiaFaixaS + (2 * zona.meiaFaixaS) * (i / passos);
+        const a = pista.amostraEmS(s);
+        pontos.push({ x: a.extX, y: a.extY });
     }
     for (let i = passos; i >= 0; i--) {
-        const a = zona.angulo - zona.meiaLargura + (2 * zona.meiaLargura) * (i / passos);
-        pontos.push(pontoNaElipse(centro.x, centro.y, pista.raioXInt(a), pista.raioYInt(a), a));
+        const s = zona.sCentro - zona.meiaFaixaS + (2 * zona.meiaFaixaS) * (i / passos);
+        const a = pista.amostraEmS(s);
+        pontos.push({ x: a.intX, y: a.intY });
     }
     g.fillPoints(pontos, true);
     return g;
@@ -172,7 +264,6 @@ function desenharZonaEspecial(scene, pista, zona, cor, alpha) {
 
 // poça d'água + mangueira — devagar ali a tampinha escorrega pro lado
 function desenharZonaAgua(scene, pista, zona) {
-    const { centro } = pista;
     desenharZonaEspecial(scene, pista, zona, 0x3f9fd6, 0.3);
 
     const passos = 16;
@@ -182,21 +273,13 @@ function desenharZonaAgua(scene, pista, zona) {
         g.beginPath();
         for (let i = 0; i <= passos; i++) {
             const t = i / passos;
-            const a = zona.angulo - zona.meiaLargura * 0.7 + zona.meiaLargura * 1.4 * t;
+            const s = zona.sCentro - zona.meiaFaixaS * 0.7 + zona.meiaFaixaS * 1.4 * t;
             const frac = 0.28 + l * 0.22;
-            const rx = Phaser.Math.Linear(pista.raioXInt(a), pista.raioXExt(a), frac);
-            const ry = Phaser.Math.Linear(pista.raioYInt(a), pista.raioYExt(a), frac);
-            const p = pontoNaElipse(centro.x, centro.y, rx, ry, a);
+            const p = pista.pontoNaFaixa(s, frac);
             if (i === 0) g.moveTo(p.x, p.y); else g.lineTo(p.x, p.y);
         }
         g.strokePath();
     }
-
-    const posMangueira = pontoNaElipse(centro.x, centro.y, pista.raioXExt(zona.angulo) + 34, pista.raioYExt(zona.angulo) + 34, zona.angulo);
-    scene.add.image(posMangueira.x, posMangueira.y, criarTexturaMangueira(scene));
-
-    const pExt = pontoNaElipse(centro.x, centro.y, pista.raioXExt(zona.angulo), pista.raioYExt(zona.angulo), zona.angulo);
-    scene.add.image(pExt.x, pExt.y, criarTexturaBicoMangueira(scene)).setRotation(zona.angulo + Math.PI / 2).setDepth(1);
 }
 
 // trecho de grama/areia — mais atrito, a tampinha perde força mais rápido ali
@@ -204,55 +287,45 @@ function desenharZonaAreia(scene, pista, zona) {
     desenharZonaEspecial(scene, pista, zona, 0x9c8a4e, 0.35);
 
     for (let i = 0; i < 10; i++) {
-        const a = zona.angulo - zona.meiaLargura + Phaser.Math.FloatBetween(0, 2 * zona.meiaLargura);
+        const s = zona.sCentro - zona.meiaFaixaS + Phaser.Math.FloatBetween(0, 2 * zona.meiaFaixaS);
         const frac = Phaser.Math.FloatBetween(0.15, 0.85);
-        const rx = Phaser.Math.Linear(pista.raioXInt(a), pista.raioXExt(a), frac);
-        const ry = Phaser.Math.Linear(pista.raioYInt(a), pista.raioYExt(a), frac);
-        const p = pontoNaElipse(pista.centro.x, pista.centro.y, rx, ry, a);
+        const p = pista.pontoNaFaixa(s, frac);
         scene.add.image(p.x, p.y, criarTexturaTouceira(scene)).setAlpha(0.85)
             .setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
     }
 }
 
-// espalha decoração ao longo de toda a borda externa da pista grande (não mais nos "cantos da tela")
+// espalha decoração ao longo de toda a borda externa da pista grande
 function espalharDecoracaoNaPista(scene, pista) {
     const miudos = [criarTexturaFolha(scene), criarTexturaPedra(scene)];
     const voltas = 90;
 
     for (let i = 0; i < voltas; i++) {
-        const angulo = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const s = Phaser.Math.FloatBetween(0, pista.comprimentoTotal);
         const margem = Phaser.Math.Between(50, 170);
-        const p = pontoNaElipse(
-            pista.centro.x, pista.centro.y,
-            pista.raioXExt(angulo) + margem, pista.raioYExt(angulo) + margem,
-            angulo
-        );
+        const a = pista.amostraEmS(s);
+        const p = { x: a.extX + a.nx * margem, y: a.extY + a.ny * margem };
         if (p.x < 0 || p.x > MUNDO_LARGURA || p.y < 0 || p.y > MUNDO_ALTURA) continue;
 
         const tipo = Phaser.Utils.Array.GetRandom(miudos);
-        scene.add.image(p.x, p.y, tipo)
-            .setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2))
-            .setAlpha(0.85);
+        scene.add.image(p.x, p.y, tipo).setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2)).setAlpha(0.85);
     }
 
     for (let i = 0; i < 45; i++) {
-        const angulo = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const s = Phaser.Math.FloatBetween(0, pista.comprimentoTotal);
         const margem = Phaser.Math.Between(20, 90);
-        const p = pontoNaElipse(
-            pista.centro.x, pista.centro.y,
-            pista.raioXExt(angulo) + margem, pista.raioYExt(angulo) + margem,
-            angulo
-        );
+        const a = pista.amostraEmS(s);
+        const p = { x: a.extX + a.nx * margem, y: a.extY + a.ny * margem };
         if (p.x < 0 || p.x > MUNDO_LARGURA || p.y < 0 || p.y > MUNDO_ALTURA) continue;
         scene.add.image(p.x, p.y, criarTexturaTouceira(scene)).setAlpha(0.9);
     }
 
-    // vasos e chinelo espalhados ao redor, só decorando, longe da pista
     const pontosDecor = [];
     for (let i = 0; i < 6; i++) {
-        const angulo = (Math.PI * 2 / 6) * i + Phaser.Math.FloatBetween(-0.2, 0.2);
+        const s = pista.comprimentoTotal * (i / 6) + Phaser.Math.FloatBetween(-40, 40);
         const margem = Phaser.Math.Between(120, 200);
-        pontosDecor.push(pontoNaElipse(pista.centro.x, pista.centro.y, pista.raioXExt(angulo) + margem, pista.raioYExt(angulo) + margem, angulo));
+        const a = pista.amostraEmS(s);
+        pontosDecor.push({ x: a.extX + a.nx * margem, y: a.extY + a.ny * margem });
     }
     Phaser.Utils.Array.Shuffle(pontosDecor).slice(0, 4).forEach(pos => {
         if (pos.x < 20 || pos.x > MUNDO_LARGURA - 20 || pos.y < 20 || pos.y > MUNDO_ALTURA - 20) return;
@@ -265,19 +338,22 @@ function espalharDecoracaoNaPista(scene, pista) {
 
 // decora a ilha central com um vasinho e algumas pedrinhas
 function decorarIlhaCentral(scene, pista) {
-    const raioMedioX = (pista.raioXInt(0) + pista.raioXInt(Math.PI / 2)) / 2 * 0.5;
-    const raioMedioY = (pista.raioYInt(0) + pista.raioYInt(Math.PI / 2)) / 2 * 0.5;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    pista.lut.forEach(p => {
+        minX = Math.min(minX, p.intX); maxX = Math.max(maxX, p.intX);
+        minY = Math.min(minY, p.intY); maxY = Math.max(maxY, p.intY);
+    });
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    const raioX = (maxX - minX) / 2 * 0.55, raioY = (maxY - minY) / 2 * 0.55;
 
-    scene.add.image(pista.centro.x, pista.centro.y - raioMedioY * 0.3, criarTexturaVaso(scene)).setScale(1.4);
+    scene.add.image(cx, cy - raioY * 0.3, criarTexturaVaso(scene)).setScale(1.4);
 
     for (let i = 0; i < 10; i++) {
         const angulo = Phaser.Math.FloatBetween(0, Math.PI * 2);
         const r = Phaser.Math.FloatBetween(0.15, 0.75);
-        const x = pista.centro.x + Math.cos(angulo) * raioMedioX * r;
-        const y = pista.centro.y + Math.sin(angulo) * raioMedioY * r;
-        scene.add.image(x, y, criarTexturaPedra(scene)).setAlpha(0.8)
-            .setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
+        scene.add.image(cx + Math.cos(angulo) * raioX * r, cy + Math.sin(angulo) * raioY * r, criarTexturaPedra(scene))
+            .setAlpha(0.8).setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
     }
 
-    scene.add.text(pista.centro.x, pista.centro.y + raioMedioY * 0.35, '🏁', { fontSize: '40px' }).setOrigin(0.5).setAlpha(0.9);
+    scene.add.text(cx, cy + raioY * 0.35, '🏁', { fontSize: '40px' }).setOrigin(0.5).setAlpha(0.9);
 }

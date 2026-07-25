@@ -1,54 +1,93 @@
-/* CollisionManager: cria bordas visuais da pista e gerencia resposta opcional.
-   A implementação aqui mantém as bordas apenas visuais para permitir que as tampinhas
-   sejam empurradas para fora da pista; a lógica de penalidade por sair da pista fica em
-   `GameScene.aplicarPenalidadeForaDaPista`.
+/* CollisionManager: resposta de colisão tampinha-tampinha e a "borda mole" da pista.
+
+   A pista NÃO tem parede física rígida (ver Track.js — não existe mais criarParedesPista
+   com corpos estáticos). A borda é só uma linha desenhada; o comportamento dela — segurar
+   petelecos fracos, deixar os fortes passarem, permitir empurrar o adversário pra fora — é
+   toda feita aqui, em cima da posição/velocidade real da tampinha a cada frame.
 */
 
 const CollisionManager = {
-    // cria apenas elementos visuais que representam a borda da pista.
-    // NÃO criamos corpos físicos aqui para que as tampinhas possam sair da pista
-    // quando um impacto forte as empurra além da linha — o jogo usa a lógica
-    // de penalidade em `GameScene.aplicarPenalidadeForaDaPista` para reposicionar.
-    createBorders(scene, pista, opts = {}) {
-        const passos = opts.passos || 60;
-        const espessura = opts.espessura || 18;
-        const deslocamento = opts.deslocamento || 10;
-        const bordasVisuais = [];
+    // ---------- tampinha vs tampinha ----------
+    // O Arcade já resolveu a sobreposição e aplicou sua resposta padrão antes deste callback
+    // rodar; aqui a gente reforça o impulso (pra parecer batida de metal, não toque de pluma),
+    // e adiciona um giro visual proporcional à "pancada de lado" do impacto.
+    resolveCapCollision(a, b) {
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const nx = dx / dist, ny = dy / dist;
 
-        const criarSegmento = (pA, pB, lado) => {
-            const dx = pB.x - pA.x;
-            const dy = pB.y - pA.y;
-            const comprimento = Phaser.Math.Distance.Between(pA.x, pA.y, pB.x, pB.y) + 2;
-            const comprimentoRecip = 1 / comprimento;
-            const normal = { x: -dy * comprimentoRecip, y: dx * comprimentoRecip };
-            const x = (pA.x + pB.x) / 2 + normal.x * deslocamento * lado;
-            const y = (pA.y + pB.y) / 2 + normal.y * deslocamento * lado;
-            // retângulo apenas para referência visual / depuração — sem física
-            const rect = scene.add.rectangle(x, y, comprimento, espessura, 0x000000, 0).setVisible(false);
-            rect.setRotation(Phaser.Math.Angle.BetweenPoints(pA, pB));
-            bordasVisuais.push(rect);
-        };
+        const rvx = b.body.velocity.x - a.body.velocity.x;
+        const rvy = b.body.velocity.y - a.body.velocity.y;
+        const velNormal = rvx * nx + rvy * ny;
 
-        for (let i = 0; i < passos; i++) {
-            const a = (Math.PI * 2 / passos) * i;
-            const an = (Math.PI * 2 / passos) * (i + 1);
-
-            const extA = pontoNaElipse(pista.centro.x, pista.centro.y, pista.raioXExt(a), pista.raioYExt(a), a);
-            const extB = pontoNaElipse(pista.centro.x, pista.centro.y, pista.raioXExt(an), pista.raioYExt(an), an);
-            criarSegmento(extA, extB, 1);
-
-            const intA = pontoNaElipse(pista.centro.x, pista.centro.y, pista.raioXInt(a), pista.raioYInt(a), a);
-            const intB = pontoNaElipse(pista.centro.x, pista.centro.y, pista.raioXInt(an), pista.raioYInt(an), an);
-            criarSegmento(intA, intB, -1);
+        // reforça sempre que ainda houver aproximação — e com bem mais força que antes: o
+        // Arcade sozinho estava deixando a tampinha batida quase parada, o que não parece
+        // uma batida de verdade entre dois objetos com peso.
+        if (velNormal < 0) {
+            const REFORCO = 1.15; // fração extra somada em cima da resposta padrão do Arcade
+            const impulso = -velNormal * REFORCO;
+            a.body.velocity.x -= nx * impulso;
+            a.body.velocity.y -= ny * impulso;
+            b.body.velocity.x += nx * impulso;
+            b.body.velocity.y += ny * impulso;
         }
 
-        return bordasVisuais;
+        // giro visual (cosmético, não mexe na física): impacto fora do centro — a componente
+        // tangencial da velocidade relativa — faz cada tampinha "torcer" um pouco, dando a
+        // sensação de peso e de impacto real baseado no ângulo da batida.
+        const tx = -ny, ty = nx;
+        const velTangencial = rvx * tx + rvy * ty;
+        const GIRO = 0.0025;
+        a.rotation -= velTangencial * GIRO;
+        b.rotation += velTangencial * GIRO;
+
+        if (window.CapPhysics) {
+            CapPhysics.onImpulse(a);
+            CapPhysics.onImpulse(b);
+        }
     },
 
-    // Sem colisores físicos: bordas são visuais para que as tampinhas possam
-    // cruzar a linha. A penalidade por sair da pista é tratada em GameScene.
-    addBorderColliders() {
-        // intentionally empty
+    // ---------- borda "mole" da pista ----------
+    // status vem de calcularStatusNaPista(pista, t.x, t.y). Chamar 1x por tampinha por frame,
+    // sempre (não só quando já está fora) — o próprio "alemDaBorda" cuida de não fazer nada
+    // enquanto a tampinha estiver bem dentro da faixa.
+    LIMIAR_ATRAVESSAR: 260, // px/s — abaixo disso a borda seve como freio; acima, ela cede
+    ZONA_DEGRAU: 30,        // px além da linha onde o "degrau" ainda segura
+
+    aplicarBordaPista(t, status) {
+        const alem = status.alemDaBorda;
+        if (alem <= 0) return { bateu: false, atravessou: false };
+
+        const v = Math.hypot(t.body.velocity.x, t.body.velocity.y);
+        const lado = status.lateral >= 0 ? 1 : -1; // de que lado da faixa ela saiu
+
+        if (v < this.LIMIAR_ATRAVESSAR || alem > this.ZONA_DEGRAU * 3) {
+            // peteleco normal: a borda segura — remove a componente de velocidade que ainda
+            // aponta pra fora, dá um empurrãozinho de volta pra dentro da faixa, e tira uma
+            // boa parte da energia (bateu num degrauzinho, não é elástico feito parede de borracha)
+            const compForaX = t.body.velocity.x * status.nx * lado;
+            const compForaY = t.body.velocity.y * status.ny * lado;
+            const compFora = compForaX + compForaY;
+            if (compFora > 0) {
+                t.body.velocity.x -= status.nx * lado * compFora * 1.4;
+                t.body.velocity.y -= status.ny * lado * compFora * 1.4;
+            }
+
+            const empurrao = Math.min(alem, this.ZONA_DEGRAU) * 5;
+            t.body.velocity.x -= status.nx * lado * empurrao;
+            t.body.velocity.y -= status.ny * lado * empurrao;
+
+            t.body.velocity.x *= 0.7;
+            t.body.velocity.y *= 0.7;
+
+            return { bateu: true, atravessou: false };
+        }
+
+        // forte o bastante pra atravessar: deixa passar (ela sai da pista de verdade), mas
+        // "pular o degrau" ainda custa um pouco de velocidade — não é totalmente de graça
+        t.body.velocity.x *= 0.9;
+        t.body.velocity.y *= 0.9;
+        return { bateu: false, atravessou: true };
     }
 };
 

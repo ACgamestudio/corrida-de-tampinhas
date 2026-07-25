@@ -1,60 +1,61 @@
-/* CapPhysics: controla a desaceleração em duas fases das tampinhas.
+/* CapPhysics: atrito real das tampinhas sobre o cimento.
    Uso:
      CapPhysics.init(scene);
-     CapPhysics.onImpulse(tampinha, speed); // registrar novo impulso
-     CapPhysics.updateAll(scene, tampinhas);
+     CapPhysics.onImpulse(tampinha, forca); // registra um novo peteleco/impacto
+     CapPhysics.updateAll(scene, tampinhas); // chamar 1x por frame, no update() da cena
 */
 
 const CapPhysics = {
     init(scene) {
         this.scene = scene;
-        // duração (s) da fase 1 — comportamento "normal" após o peteleco
-        this.fase1 = 0.35;
-        // duração (s) da fase 2 — perda rápida de força
-        this.fase2 = 1.2;
-        // fatores de decaimento por fase (multiplicadores aplicados por frame)
-        this.dragFase1 = 0.997; // leve
-        this.dragFase2 = 0.96;  // forte
-        this.dragFase3 = 0.86;  // quase parada
-        this.limiarParada = 8; // px/s
+
+        // atrito "quase constante" (tipo atrito cinético real) — isso é o que faz a tampinha
+        // desacelerar de forma previsível e parar de vez, em vez de deslizar pra sempre indo
+        // cada vez mais devagar (a sensação de "gelo" que o drag exponencial do Arcade dava).
+        this.ATRITO_CONSTANTE = 620; // px/s² — perda de velocidade constante por atrito
+
+        // um pouco de arrasto proporcional à velocidade — dá uma sensação extra de controle
+        // nos petelecos mais fortes (perdem um pouco mais de força no começo), sem tirar o
+        // caráter "linear" do atrito constante.
+        this.ARRASTO_PROPORCIONAL = 0.55; // por segundo
+
+        // abaixo disso a tampinha já não está indo a lugar nenhum — zera de vez (mantém uma
+        // pequena inércia até aqui, não trava de repente antes disso)
+        this.LIMIAR_PARADA = 6; // px/s
     },
 
-    onImpulse(t, speed) {
-        t._cap_lastImpulse = this.scene ? this.scene.time.now : Date.now();
-        t._cap_impulseSpeed = speed || Math.hypot(t.body.velocity.x, t.body.velocity.y);
+    // registra o momento/força de um novo impulso (peteleco ou colisão). Hoje serve sobretudo
+    // pra CollisionManager e AIRacer saberem "há quanto tempo essa tampinha está em movimento",
+    // mas mantém o hook aqui pra não espalhar esse estado pela cena.
+    onImpulse(t, forca) {
+        t._ultimoImpulsoEm = this.scene ? this.scene.time.now : Date.now();
+        t._ultimoImpulsoForca = forca || Math.hypot(t.body.velocity.x, t.body.velocity.y);
     },
 
     updateAll(scene, tampinhas) {
-        const now = scene.time.now;
+        const dt = Math.min(scene.game.loop.delta, 50) / 1000; // trava contra saltos de frame
+
         tampinhas.forEach(t => {
             if (!t.body) return;
-            const vx = t.body.velocity.x;
-            const vy = t.body.velocity.y;
-            let v = Math.hypot(vx, vy);
-            if (v < 0.5) { // parada imediata para evitar micro-deslizamentos
+
+            const vx = t.body.velocity.x, vy = t.body.velocity.y;
+            const v = Math.hypot(vx, vy);
+            if (v <= this.LIMIAR_PARADA) {
+                if (v > 0) t.body.setVelocity(0, 0);
+                return;
+            }
+
+            const perda = (this.ATRITO_CONSTANTE + v * this.ARRASTO_PROPORCIONAL) * dt;
+            const vNovo = Math.max(0, v - perda);
+
+            if (vNovo <= this.LIMIAR_PARADA) {
                 t.body.setVelocity(0, 0);
                 return;
             }
 
-            const impulseAt = t._cap_lastImpulse || (now - 10000);
-            const elapsed = Math.max(0, (now - impulseAt) / 1000);
-
-            let factor = 1;
-            if (elapsed <= this.fase1) {
-                factor = Math.pow(this.dragFase1, 1);
-            } else if (elapsed <= this.fase1 + this.fase2) {
-                factor = Math.pow(this.dragFase2, 1);
-            } else {
-                factor = Math.pow(this.dragFase3, 1);
-            }
-
-            t.body.velocity.x *= factor;
-            t.body.velocity.y *= factor;
-
-            v = Math.hypot(t.body.velocity.x, t.body.velocity.y);
-            if (v < this.limiarParada) {
-                t.body.setVelocity(0, 0);
-            }
+            const escala = vNovo / v;
+            t.body.velocity.x = vx * escala;
+            t.body.velocity.y = vy * escala;
         });
     }
 };

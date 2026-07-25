@@ -1,73 +1,73 @@
-/* AIRacer: decisões estratégicas para adversários.
-   API: AIRacer.decideMove(ia, pista, nivel, outros)
+/* AIRacer: decisões de peteleco pros adversários.
+   API: AIRacer.decideMove(ia, pista, nivel, outros) -> { dirX, dirY, força }
+
+   Ideia central: em vez de "sempre indo pra baixo" ou só seguindo a tangente do ponto atual,
+   a IA mira num ponto um pouco à frente NA LINHA CENTRAL da pista (técnica de "perseguição",
+   comum em IA de corrida). Isso sozinho já resolve a maior parte do trabalho: como a pista
+   curva, o ponto-alvo também curva, então o peteleco naturalmente acompanha a curva; e se a
+   tampinha estiver fora do centro da faixa, mirar no centro à frente já puxa ela de volta.
 */
 
 const AIRacer = {
-    // nivel: 'Fácil'|'Médio'|'Difícil'
+    NIVEIS: {
+        'Fácil':   { forcaMin: 380, forcaMax: 620, agressividade: 0.5 },
+        'Médio':   { forcaMin: 480, forcaMax: 760, agressividade: 0.8 },
+        'Difícil': { forcaMin: 580, forcaMax: 900, agressividade: 1.15 }
+    },
+
     decideMove(ia, pista, nivel = 'Médio', outros = []) {
+        const cfg = this.NIVEIS[nivel] || this.NIVEIS['Médio'];
         const status = calcularStatusNaPista(pista, ia.x, ia.y);
-        const ang = status.theta;
-        const sentido = -1;
 
-        // amostra curtinha para estimar curvatura: variação do raio médio
-        const sample = (da) => {
-            const a = ang + da;
-            const rx = (pista.raioXExt(a) + pista.raioXInt(a)) / 2;
-            const ry = (pista.raioYExt(a) + pista.raioYInt(a)) / 2;
-            return (rx + ry) * 0.5;
-        };
-        const r0 = sample(0);
-        const rF = sample(0.3 * sentido);
-        const curv = Math.abs(rF - r0) / Math.max(1, r0);
+        // ---------- fora da pista: prioridade é voltar, não seguir em frente ----------
+        if (!status.dentro) {
+            const alvoRecuperacao = pista.amostraEmS(status.s); // ponto central bem ali do lado
+            const dx = alvoRecuperacao.x - ia.x, dy = alvoRecuperacao.y - ia.y;
+            const norm = Math.hypot(dx, dy) || 1;
+            return {
+                dirX: dx / norm, dirY: dy / norm,
+                força: Phaser.Math.Between(cfg.forcaMin * 0.7, cfg.forcaMin * 1.1)
+            };
+        }
 
-        const niveis = {
-            'Fácil': { forcaMin: 420, forcaMax: 600, agressividade: 0.5 },
-            'Médio': { forcaMin: 480, forcaMax: 720, agressividade: 0.8 },
-            'Difícil': { forcaMin: 540, forcaMax: 860, agressividade: 1.1 }
-        };
-        const cfg = niveis[nivel] || niveis['Médio'];
+        // ---------- curvatura à frente, pra saber se deve frear ----------
+        const LOOKAHEAD_CURVA = 230;
+        const amostraAtual = pista.lut[status.indice];
+        const amostraCurva = pista.amostraEmS(status.s + LOOKAHEAD_CURVA);
+        const severidadeCurva = Math.abs(normalizarAngulo(amostraCurva.tangente - amostraAtual.tangente));
+        const curvFactor = Phaser.Math.Clamp(1 - severidadeCurva * 1.6, 0.6, 1);
 
-        // decisão de força reduz em curvas maiores
-        const curvFactor = Phaser.Math.Clamp(1 - curv * 6, 0.45, 1);
+        // ---------- quão perto da borda está (pra reagir mais rápido se estiver quase saindo) ----------
+        const proximidadeBorda = Phaser.Math.Clamp(Math.abs(status.lateral) / (pista.largura / 2), 0, 1);
 
-        // se houver alguém muito à frente no mesmo segmento angular, tente ultrapassar
-        let incrementoUltrapassagem = 0;
+        // ---------- ponto-alvo: centro da pista, um pouco à frente (mais perto se estiver
+        // quase saindo da faixa — corrige com mais urgência) ----------
+        const LOOKAHEAD_MIRA_BASE = 260 + cfg.agressividade * 60;
+        const lookaheadEfetivo = Phaser.Math.Linear(LOOKAHEAD_MIRA_BASE, LOOKAHEAD_MIRA_BASE * 0.4, proximidadeBorda);
+        const pontoAlvo = pista.pontoNaFaixa(status.s + lookaheadEfetivo, 0.5);
+
+        // ---------- ultrapassagem: se tem alguém logo à frente, mira um pouco pro lado livre ----------
+        let ajusteLateral = 0;
         outros.forEach(o => {
             if (o === ia) return;
-            const st = calcularStatusNaPista(pista, o.x, o.y);
-            const diff = normalizarAngulo(st.theta - ang);
-            if (Math.abs(diff) < 0.18) {
-                // oponente à frente
-                const velO = Math.hypot(o.body.velocity.x, o.body.velocity.y);
-                const velI = Math.hypot(ia.body.velocity.x, ia.body.velocity.y);
-                if (velO > velI - 20) incrementoUltrapassagem = 0.18 * cfg.agressividade;
+            const stO = calcularStatusNaPista(pista, o.x, o.y);
+            const diffS = diferencaS(stO.s, status.s, pista.comprimentoTotal);
+            if (diffS > 0 && diffS < 260) {
+                ajusteLateral = -Math.sign(stO.lateral || 1) * pista.largura * 0.22 * cfg.agressividade;
             }
         });
+        if (ajusteLateral !== 0) {
+            pontoAlvo.x += amostraAtual.nx * ajusteLateral;
+            pontoAlvo.y += amostraAtual.ny * ajusteLateral;
+        }
 
-        // base: tangente ao anel
-        const angTang = ang + (Math.PI / 2) * sentido;
-        let dirX = Math.cos(angTang);
-        let dirY = Math.sin(angTang);
+        const dx = pontoAlvo.x - ia.x, dy = pontoAlvo.y - ia.y;
+        const norm = Math.hypot(dx, dy) || 1;
 
-        // correção ao centro: empurra levemente para manter na faixa
-        const rxMedio = (pista.raioXExt(ang) + pista.raioXInt(ang)) / 2;
-        const ryMedio = (pista.raioYExt(ang) + pista.raioYInt(ang)) / 2;
-        const ideal = pontoNaElipse(pista.centro.x, pista.centro.y, rxMedio, ryMedio, ang);
-        const corrX = (ideal.x - ia.x);
-        const corrY = (ideal.y - ia.y);
-        const corrMag = Math.hypot(corrX, corrY) || 1;
-        const corrNormX = corrX / corrMag * 0.2 * cfg.agressividade;
-        const corrNormY = corrY / corrMag * 0.2 * cfg.agressividade;
+        let força = Phaser.Math.Between(cfg.forcaMin, cfg.forcaMax) * curvFactor;
+        força *= Phaser.Math.Linear(1, 0.85, proximidadeBorda); // um pouco de cautela perto da borda
 
-        dirX += corrNormX + incrementoUltrapassagem;
-        dirY += corrNormY;
-
-        const norm = Math.hypot(dirX, dirY) || 1;
-        dirX /= norm; dirY /= norm;
-
-        const força = Phaser.Math.Between(cfg.forcaMin, cfg.forcaMax) * curvFactor;
-
-        return { dirX, dirY, força };
+        return { dirX: dx / norm, dirY: dy / norm, força };
     }
 };
 

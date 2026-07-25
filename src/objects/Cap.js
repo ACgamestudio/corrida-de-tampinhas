@@ -149,18 +149,25 @@ function criarTampinha(scene, marca, pos, pista) {
     const t = scene.add.image(pos.x, pos.y, chave);
     scene.physics.add.existing(t);
     t.body.setCircle(30, 8, 8);
-    t.body.setDamping(true);
-    t.body.setDrag(0.98);
-    t.body.setBounce(0.6);
+    // sem drag/damping do Arcade aqui — o atrito "de verdade" (tampinha sobre cimento, não
+    // sobre gelo) é todo controlado pelo CapPhysics, que dá mais controle sobre a sensação
+    // (desaceleração quase constante, não uma curva exponencial que nunca para de vez).
+    t.body.setDamping(false);
+    t.body.setDrag(0, 0);
+    t.body.setBounce(0.55); // colisão "de metal": crispa e separa de verdade, não é mole feito massinha
+    t.body.setMass(1);
     t.body.setCollideWorldBounds(true);
 
     t.nome = marca.nome;
     t.corBase = marca.cor;
     t.sombra = sombra;
-    t.voltaAcumulada = 0;
-    t.anguloAnterior = Math.atan2(pos.y - pista.centro.y, pos.x - pista.centro.x);
-    t.posicaoSegura = { x: pos.x, y: pos.y, angulo: t.anguloAnterior };
-    t.emPenalidade = false;
+
+    // progresso na volta: acompanha a posição ao longo do traçado (s), não mais um ângulo —
+    // fica parado (não soma nem subtrai) enquanto a tampinha estiver fora da pista.
+    const statusInicial = calcularStatusNaPista(pista, pos.x, pos.y);
+    t.progressoAcumulado = 0;
+    t.sAnterior = statusInicial.s;
+    t.foraDaPista = false;
     t.molhando = false;
 
     t.rastro = scene.add.particles(0, 0, criarTexturaParticula(scene, 'particulaRastro_' + marca.nome.replace(/\s+/g, '_'), marca.cor), {

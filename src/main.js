@@ -530,7 +530,7 @@ const config = {
             debug: false
         }
     },
-    scene: [MenuScene, SelecaoScene, GameScene]
+    scene: [MenuScene, SelecaoScene, SelecaoPistaScene, GameScene]
 };
 
 function iniciarJogo() {

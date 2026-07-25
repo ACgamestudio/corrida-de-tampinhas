@@ -4,6 +4,10 @@ class GameScene extends Phaser.Scene {
         super('CorridaScene');
     }
 
+    preload() {
+        this.load.image('fundoPista', 'assets/images/garage_bg.png');
+    }
+
     create() {
         this.tampinhas = [];
         this.isDragging = false;
@@ -12,58 +16,46 @@ class GameScene extends Phaser.Scene {
         this.corridaLiberada = false;
 
         this.pista = construirPista();
+        CapPhysics.init(this);
 
-        // faixa estreita onde a mangueira liga e molha a pista: devagar ali a tampinha escorrega
-        this.zonaAgua = { angulo: Math.PI * 0.5, meiaLargura: 0.09, limiarVelocidade: 195 };
-        // trecho de grama/terra batida: mais atrito, perde força mais rápido
-        // (ângulo cardinal — nos ângulos "quebrados" a elipse tem raioX ≠ raioY, então o ângulo
-        // paramétrico usado pra desenhar a zona diverge do ângulo geométrico usado pra detectá-la)
-        this.zonaAreia = { angulo: Math.PI * 1.5, meiaLargura: 0.08 };
+        // faixa onde a mangueira liga e molha a pista: devagar ali a tampinha escorrega pro
+        // lado — agora localizada por posição ao longo do traçado (s), não mais por ângulo
+        this.zonaAgua = { sCentro: this.pista.comprimentoTotal * 0.28, meiaFaixaS: 90, limiarVelocidade: 195 };
+        // trecho de grama/terra batida: mais atrito, perde força mais rápido ali
+        this.zonaAreia = { sCentro: this.pista.comprimentoTotal * 0.68, meiaFaixaS: 110 };
 
         this.FORCA_MAXIMA = 900;
         this.DISTANCIA_MAXIMA = 140;
         this.VELOCIDADE_MINIMA_PARADA = 5;
-        this.RETROCESSO_FORA_DA_PISTA = 0.3; // ~17°, "alguns metros" de volta quando sai da pista
 
         // ---------- mundo grande + câmera acompanhando quem está jogando ----------
         this.physics.world.setBounds(0, 0, MUNDO_LARGURA, MUNDO_ALTURA);
         this.cameras.main.setBounds(0, 0, MUNDO_LARGURA, MUNDO_ALTURA);
 
-        this.add.tileSprite(0, 0, MUNDO_LARGURA, MUNDO_ALTURA, criarTexturaCimento(this)).setOrigin(0, 0);
-        espalharDecoracaoNaPista(this, this.pista);
+        this.add.image(MUNDO_LARGURA / 2, MUNDO_ALTURA / 2, 'fundoPista')
+            .setDisplaySize(MUNDO_LARGURA, MUNDO_ALTURA);
         desenharPista(this, this.pista);
-        decorarIlhaCentral(this, this.pista);
         desenharZonaAgua(this, this.pista, this.zonaAgua);
         desenharZonaAreia(this, this.pista, this.zonaAreia);
 
-        const paredes = criarParedesPista(this, this.pista);
-
-        // ---------- grid de largada: 4 tampinhas, 2 filas x 2 colunas, no ângulo 180° ----------
-        const anguloLargada = Math.PI;
-        const anguloFilaTras = anguloLargada - 0.045;
-
-        const posNaFaixa = (angulo, fracaoLargura) => {
-            const ext = pontoNaElipse(this.pista.centro.x, this.pista.centro.y, this.pista.raioXExt(angulo), this.pista.raioYExt(angulo), angulo);
-            const int = pontoNaElipse(this.pista.centro.x, this.pista.centro.y, this.pista.raioXInt(angulo), this.pista.raioYInt(angulo), angulo);
-            return {
-                x: Phaser.Math.Linear(int.x, ext.x, fracaoLargura),
-                y: Phaser.Math.Linear(int.y, ext.y, fracaoLargura)
-            };
-        };
-
+        // ---------- grid de largada: 4 tampinhas, 2 filas x 2 colunas, logo antes de s = 0 ----------
         const posicoesLargada = [
-            posNaFaixa(anguloLargada, 0.30),
-            posNaFaixa(anguloLargada, 0.70),
-            posNaFaixa(anguloFilaTras, 0.30),
-            posNaFaixa(anguloFilaTras, 0.70)
+            this.pista.pontoNaFaixa(0, 0.30),
+            this.pista.pontoNaFaixa(0, 0.70),
+            this.pista.pontoNaFaixa(-50, 0.30),
+            this.pista.pontoNaFaixa(-50, 0.70)
         ];
 
         const marcasParaIA = Phaser.Utils.Array.Shuffle(MARCAS_DISPONIVEIS.filter(m => m.nome !== JogoState.marcaJogador)).slice(0, 3);
         const marcaJogador = MARCAS_DISPONIVEIS.find(m => m.nome === JogoState.marcaJogador) || MARCAS_DISPONIVEIS[0];
         const MARCAS_CORRIDA = [marcaJogador, ...marcasParaIA];
 
+        // adversários com níveis diferentes de habilidade — não são todos iguais
+        const NIVEIS_IA = ['Fácil', 'Médio', 'Difícil'];
+
         for (let i = 0; i < MARCAS_CORRIDA.length; i++) {
             const t = criarTampinha(this, MARCAS_CORRIDA[i], posicoesLargada[i], this.pista);
+            if (i > 0) t.nivelIA = NIVEIS_IA[(i - 1) % NIVEIS_IA.length];
             this.tampinhas.push(t);
         }
 
@@ -77,11 +69,13 @@ class GameScene extends Phaser.Scene {
         this.atualizarInteratividadeJogador();
 
         const grupoTampinhas = this.physics.add.group(this.tampinhas);
-        this.physics.add.collider(grupoTampinhas, grupoTampinhas, () => {
+        this.physics.add.collider(grupoTampinhas, grupoTampinhas, (a, b) => {
+            CollisionManager.resolveCapCollision(a, b);
             SomFX.colisao();
             this.cameras.main.shake(120, 0.006);
         });
-        this.physics.add.collider(grupoTampinhas, paredes, () => SomFX.colisao());
+        // sem collider contra a pista: a borda é "mole" (ver CollisionManager.aplicarBordaPista,
+        // chamado a cada frame no update()) — não uma parede rígida do Arcade.
 
         // ---------- câmera: corta na hora pro competidor da vez e acompanha suavemente ----------
         this.cameras.main.centerOn(this.jogador.x, this.jogador.y);
@@ -154,6 +148,7 @@ class GameScene extends Phaser.Scene {
                 Math.cos(angulo) * forca,
                 Math.sin(angulo) * forca
             );
+            CapPhysics.onImpulse(gameObject, forca);
 
             gameObject.x = this.dragStart.x;
             gameObject.y = this.dragStart.y;
@@ -227,20 +222,18 @@ class GameScene extends Phaser.Scene {
 
         const contorno = this.add.graphics().setScrollFactor(0).setDepth(999);
         contorno.lineStyle(1.5, 0xffffff, 0.8);
-        const passos = 60;
-        const desenhaContorno = (raioXFn, raioYFn) => {
+        const desenhaContorno = (chave) => {
             contorno.beginPath();
-            for (let i = 0; i <= passos; i++) {
-                const a = (Math.PI * 2 / passos) * i;
-                const p = pontoNaElipse(this.pista.centro.x, this.pista.centro.y, raioXFn(a), raioYFn(a), a);
-                const mx = box.x + p.x * this.minimapaEscala.x;
-                const my = box.y + p.y * this.minimapaEscala.y;
+            this.pista.lut.forEach((p, i) => {
+                const mx = box.x + p[chave + 'X'] * this.minimapaEscala.x;
+                const my = box.y + p[chave + 'Y'] * this.minimapaEscala.y;
                 if (i === 0) contorno.moveTo(mx, my); else contorno.lineTo(mx, my);
-            }
+            });
+            contorno.closePath();
             contorno.strokePath();
         };
-        desenhaContorno(this.pista.raioXExt, this.pista.raioYExt);
-        desenhaContorno(this.pista.raioXInt, this.pista.raioYInt);
+        desenhaContorno('ext');
+        desenhaContorno('int');
     }
 
     atualizarMinimapa() {
@@ -315,20 +308,20 @@ class GameScene extends Phaser.Scene {
         this.textoTurno.setVisible(true);
     }
 
-    // um peteleco só, mirando aproximadamente na direção de avanço da pista (tangente ao anel)
+    // cada IA usa seu próprio nível (Fácil/Médio/Difícil) pra decidir direção e força —
+    // mira num ponto à frente na linha central da pista, freia antes de curvas fechadas e
+    // corrige se estiver perto demais da borda (ver AIRacer.decideMove)
     iaFazerJogada() {
         if (this.vencedor) return;
 
         const ia = this.tampinhas[this.turnoAtual];
-        const anguloAtual = Math.atan2(ia.y - this.pista.centro.y, ia.x - this.pista.centro.x);
-        const sentido = -1; // sentido horário ao redor do anel
-        const anguloTangente = anguloAtual + (Math.PI / 2) * sentido + Phaser.Math.FloatBetween(-0.3, 0.3);
-        const forca = Phaser.Math.Between(480, 840);
+        const decisao = AIRacer.decideMove(ia, this.pista, ia.nivelIA, this.tampinhas);
 
         ia.body.setVelocity(
-            Math.cos(anguloTangente) * forca,
-            Math.sin(anguloTangente) * forca
+            decisao.dirX * decisao.força,
+            decisao.dirY * decisao.força
         );
+        CapPhysics.onImpulse(ia, decisao.força);
 
         SomFX.peteleco();
         this.aguardandoParada = true;
@@ -356,38 +349,6 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    // a tampinha saiu da pista: toca o efeito, treme a câmera e a puxa de volta alguns "metros"
-    aplicarPenalidadeForaDaPista(t, status) {
-        t.emPenalidade = true;
-        SomFX.foraDaPista();
-        this.cameras.main.shake(150, 0.008);
-
-        const anguloDePartida = t.posicaoSegura ? t.posicaoSegura.angulo : status.theta;
-        const anguloRecuo = anguloDePartida - this.RETROCESSO_FORA_DA_PISTA;
-
-        const rMedioX = (this.pista.raioXExt(anguloRecuo) + this.pista.raioXInt(anguloRecuo)) / 2;
-        const rMedioY = (this.pista.raioYExt(anguloRecuo) + this.pista.raioYInt(anguloRecuo)) / 2;
-        const novaPos = pontoNaElipse(this.pista.centro.x, this.pista.centro.y, rMedioX, rMedioY, anguloRecuo);
-
-        const deltaRecuo = normalizarAngulo(anguloRecuo - status.theta);
-        t.voltaAcumulada += deltaRecuo;
-        t.anguloAnterior = anguloRecuo;
-        t.posicaoSegura = { x: novaPos.x, y: novaPos.y, angulo: anguloRecuo };
-
-        t.body.setVelocity(0, 0);
-        t.x = novaPos.x;
-        t.y = novaPos.y;
-
-        const respingo = this.add.particles(t.x, t.y,
-            criarTexturaParticula(this, 'particulaAgua', 0x3f9fd6), {
-                lifespan: 400, speed: { min: 60, max: 160 }, scale: { start: 0.8, end: 0 },
-                alpha: { start: 0.8, end: 0 }, quantity: 12, emitting: false
-            });
-        respingo.explode(12);
-
-        this.time.delayedCall(400, () => { t.emPenalidade = false; });
-    }
-
     update() {
         this.tampinhas.forEach(t => {
             if (t.sombra) {
@@ -409,31 +370,45 @@ class GameScene extends Phaser.Scene {
 
         if (this.vencedor) return;
 
+        // atrito real de todas as tampinhas (ver CapPhysics) — chamado 1x por frame, sempre
+        CapPhysics.updateAll(this, this.tampinhas);
+
         this.verificarFimDeTurno();
 
-        // progresso na volta: acumula o ângulo percorrido ao redor do centro da pista.
         this.tampinhas.forEach(t => {
             const status = calcularStatusNaPista(this.pista, t.x, t.y);
 
-            if (!status.dentro && !t.emPenalidade) {
-                this.aplicarPenalidadeForaDaPista(t, status);
-                return;
-            }
-            if (status.dentro) {
-                t.posicaoSegura = { x: t.x, y: t.y, angulo: status.theta };
-            }
+            // borda "mole": segura petelecos normais (perdem velocidade e continuam na pista),
+            // deixa os fortes atravessarem — nunca é uma parede rígida
+            CollisionManager.aplicarBordaPista(t, status);
 
-            // zona molhada da mangueira: devagar ali, a água empurra a tampinha pra fora da pista
-            if (status.dentro && t.body) {
-                const diffAgua = normalizarAngulo(status.theta - this.zonaAgua.angulo);
-                if (Math.abs(diffAgua) < this.zonaAgua.meiaLargura) {
+            if (!status.dentro) {
+                // fora da pista de verdade: chão irregular (grama/terra), sem teleporte —
+                // só a consequência natural de estar fora do cimento, perdendo velocidade
+                // mais rápido e sem ganhar progresso na volta enquanto estiver lá fora.
+                t.body.velocity.x *= 0.965;
+                t.body.velocity.y *= 0.965;
+                t.foraDaPista = true;
+            } else {
+                if (t.foraDaPista) {
+                    // acabou de voltar pra pista: resincroniza sem contar o salto como progresso
+                    t.sAnterior = status.s;
+                } else {
+                    const delta = diferencaS(status.s, t.sAnterior, this.pista.comprimentoTotal);
+                    t.progressoAcumulado += delta;
+                    t.sAnterior = status.s;
+                }
+                t.foraDaPista = false;
+
+                // zona molhada da mangueira: devagar ali, a água empurra a tampinha pra fora
+                const diffAgua = diferencaS(status.s, this.zonaAgua.sCentro, this.pista.comprimentoTotal);
+                if (Math.abs(diffAgua) < this.zonaAgua.meiaFaixaS) {
                     const velocidade = Phaser.Math.Distance.Between(0, 0, t.body.velocity.x, t.body.velocity.y);
                     if (velocidade > 4 && velocidade < this.zonaAgua.limiarVelocidade) {
                         const fatorEscorregao = 1 - (velocidade / this.zonaAgua.limiarVelocidade);
-                        const direcaoRadial = Math.atan2(t.y - this.pista.centro.y, t.x - this.pista.centro.x);
                         const empurrao = fatorEscorregao * 5.5;
-                        t.body.velocity.x += Math.cos(direcaoRadial) * empurrao;
-                        t.body.velocity.y += Math.sin(direcaoRadial) * empurrao;
+                        t.body.velocity.x += status.nx * empurrao;
+                        t.body.velocity.y += status.ny * empurrao;
 
                         if (!t.molhando) {
                             t.molhando = true;
@@ -444,21 +419,14 @@ class GameScene extends Phaser.Scene {
                 }
 
                 // trecho de grama/terra: mais atrito, a tampinha perde força mais rápido ali
-                const diffAreia = normalizarAngulo(status.theta - this.zonaAreia.angulo);
-                if (Math.abs(diffAreia) < this.zonaAreia.meiaLargura) {
+                const diffAreia = diferencaS(status.s, this.zonaAreia.sCentro, this.pista.comprimentoTotal);
+                if (Math.abs(diffAreia) < this.zonaAreia.meiaFaixaS) {
                     t.body.velocity.x *= 0.965;
                     t.body.velocity.y *= 0.965;
                 }
             }
 
-            const anguloAtual = status.theta;
-            let delta = anguloAtual - t.anguloAnterior;
-            if (delta > Math.PI) delta -= Math.PI * 2;
-            if (delta < -Math.PI) delta += Math.PI * 2;
-            t.voltaAcumulada += delta;
-            t.anguloAnterior = anguloAtual;
-
-            if (Math.abs(t.voltaAcumulada) >= Math.PI * 2 && !this.vencedor) {
+            if (t.progressoAcumulado >= this.pista.comprimentoTotal && !this.vencedor) {
                 this.vencedor = t.nome;
                 this.tampinhaVencedora = t;
                 this.atualizarInteratividadeJogador();
