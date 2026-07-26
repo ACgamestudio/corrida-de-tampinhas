@@ -19,20 +19,23 @@ const CollisionManager = {
         const rvx = b.body.velocity.x - a.body.velocity.x;
         const rvy = b.body.velocity.y - a.body.velocity.y;
         const velNormal = rvx * nx + rvy * ny; // >0 = já se separando (b se afasta de a)
+        const velRelTotal = Math.hypot(rvx, rvy); // "energia" do impacto, sem depender do ângulo exato
 
-        // O Arcade já separou as duas e distribuiu velocidade entre elas antes deste callback
-        // rodar — o problema é que, com bounce moderado, essa separação sozinha fica fraca
-        // demais pra "arrancar" a tampinha atingida da pista. Em vez de só reforçar nos raros
-        // casos em que ainda estariam se aproximando (o que quase nunca acontece depois do
-        // Arcade já ter resolvido a sobreposição), a gente AMPLIFICA a separação que já existe
-        // — sempre, de forma consistente — pra a batida ficar decisiva de verdade.
-        if (velNormal > 0) {
-            const BOOST = 1.9; // separação final = separação original × BOOST
-            const extra = velNormal * (BOOST - 1) / 2;
-            a.body.velocity.x -= nx * extra;
-            a.body.velocity.y -= ny * extra;
-            b.body.velocity.x += nx * extra;
-            b.body.velocity.y += ny * extra;
+        if (velRelTotal > 20) {
+            // Duas fontes de empurrão, e usamos a MAIOR das duas:
+            // 1) amplifica a separação que o Arcade já calculou (bom pra batidas quase de frente)
+            // 2) um empurrão mínimo baseado na velocidade relativa TOTAL do impacto (garante que
+            //    batidas de raspão — onde a componente ao longo da normal é pequena mas a
+            //    velocidade real do choque é alta — também derrubem a tampinha atingida)
+            const BOOST = 1.9;
+            const porSeparacao = Math.max(velNormal, 0) * (BOOST - 1);
+            const porEnergia = velRelTotal * 0.85;
+            const impulso = Math.max(porSeparacao, porEnergia) / 2;
+
+            a.body.velocity.x -= nx * impulso;
+            a.body.velocity.y -= ny * impulso;
+            b.body.velocity.x += nx * impulso;
+            b.body.velocity.y += ny * impulso;
         }
 
         // giro visual (cosmético, não mexe na física): impacto fora do centro — a componente

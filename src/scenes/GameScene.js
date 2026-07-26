@@ -30,13 +30,18 @@ class GameScene extends Phaser.Scene {
         this.FORCA_MAXIMA = 900;
         this.DISTANCIA_MAXIMA = 140;
         this.VELOCIDADE_MINIMA_PARADA = 5;
+        this.PENALIDADE_RETROCESSO_PX = 900; // sair da pista custa 900px de volta na volta
 
         // ---------- mundo grande + câmera acompanhando quem está jogando ----------
         this.physics.world.setBounds(0, 0, MUNDO_LARGURA, MUNDO_ALTURA);
         this.cameras.main.setBounds(0, 0, MUNDO_LARGURA, MUNDO_ALTURA);
 
-        this.add.image(MUNDO_LARGURA / 2, MUNDO_ALTURA / 2, 'fundoPista')
-            .setDisplaySize(MUNDO_LARGURA, MUNDO_ALTURA);
+        // a foto tem só 1408x768 — qualquer ampliação borra ela. Mosaico em escala 1:1
+        // (tamanho real, sem ampliar nada) pra manter nítida; ela só se repete mais vezes
+        // pelo mundo (a maior parte da área de jogo já é coberta pela cor sólida da pista).
+        this.add.tileSprite(0, 0, MUNDO_LARGURA, MUNDO_ALTURA, 'fundoPista')
+            .setOrigin(0, 0)
+            .setTileScale(1, 1);
         desenharPista(this, this.pista);
         desenharZonaAgua(this, this.pista, this.zonaAgua);
         desenharZonaAreia(this, this.pista, this.zonaAreia);
@@ -385,13 +390,32 @@ class GameScene extends Phaser.Scene {
             // deixa os fortes atravessarem — nunca é uma parede rígida
             CollisionManager.aplicarBordaPista(t, status);
 
+            if (!status.dentro && !t.foraDaPista) {
+                // acabou de sair da pista agora mesmo: penalidade — some no ponto de saída e
+                // reaparece centralizada na faixa, PENALIDADE_RETROCESSO_PX pra trás (na volta),
+                // parada. Não é gradual nem "escorregando pra fora"; é o castigo de ter saído.
+                SomFX.foraDaPista();
+                this.cameras.main.shake(160, 0.01);
+
+                const sPunicao = status.s - this.PENALIDADE_RETROCESSO_PX;
+                const posPenalidade = this.pista.pontoNaFaixa(sPunicao, 0.5);
+                const amostraPunicao = this.pista.amostraEmS(sPunicao);
+
+                t.body.setVelocity(0, 0);
+                t.x = posPenalidade.x;
+                t.y = posPenalidade.y;
+                t.sAnterior = amostraPunicao.s;
+                t.progressoAcumulado -= this.PENALIDADE_RETROCESSO_PX;
+                t.foraDaPista = false; // já está de volta na pista, centralizada
+
+                return; // já tratamos essa tampinha por completo neste quadro
+            }
+
             if (!status.dentro) {
-                // fora da pista de verdade: chão irregular (grama/terra), sem teleporte —
-                // só a consequência natural de estar fora do cimento, perdendo velocidade
-                // mais rápido e sem ganhar progresso na volta enquanto estiver lá fora.
+                // ainda fora (não é o quadro em que saiu — isso já foi punido acima): chão
+                // irregular (grama/terra), perdendo velocidade mais rápido enquanto não volta
                 t.body.velocity.x *= 0.965;
                 t.body.velocity.y *= 0.965;
-                t.foraDaPista = true;
             } else {
                 if (t.foraDaPista) {
                     // acabou de voltar pra pista: resincroniza sem contar o salto como progresso
