@@ -73,3 +73,6 @@ const AIRacer = {
 
 if (typeof module !== 'undefined') module.exports = AIRacer;
 window.AIRacer = AIRacer;
+
+if (typeof module !== 'undefined') module.exports = AIRacer;
+window.AIRacer = AIRacer;
