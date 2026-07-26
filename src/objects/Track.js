@@ -13,7 +13,7 @@ const MUNDO_ALTURA = 2400;
 
 const LARGURA_PISTA = 300;         // uniforme em toda a pista (~30% maior que a versão anterior)
 const RESOLUCAO_LUT = 900;         // amostras ao redor da volta inteira
-const COR_PISTA = 0x97856a;        // tom parecido com o chão da foto de fundo, pra não conflitar
+const COR_PISTA = 0x97856a;        // tom const COR_PISTA = 0x404040; // Cinza chumbo
 
 function pontoNaElipse(cx, cy, raioX, raioY, angulo) {
     return {
