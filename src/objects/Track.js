@@ -8,12 +8,18 @@
 // pista, indexada por "s" (distância percorrida ao longo do traçado, em pixels), em vez de
 // ângulo a partir de um centro. Isso é o que permite curvas de verdade (não só uma oval).
 
-const MUNDO_LARGURA = 3000;
+const MUNDO_LARGURA = 2000;
 const MUNDO_ALTURA = 2400;
 
+<<<<<<< HEAD
 const LARGURA_PISTA = 200;         // uniforme em toda a pista (~30% maior que a versão anterior)
 const RESOLUCAO_LUT = 900;         // amostras ao redor da volta inteira
 const COR_PISTA = 0x333333;        // tom parecido com o chão da foto de fundo, pra não conflitar
+=======
+const LARGURA_PISTA = 150;         // uniforme em toda a pista (~30% maior que a versão anterior)
+const RESOLUCAO_LUT = 900;         // amostras ao redor da volta inteira
+const COR_PISTA = 0x97856a;        // tom const COR_PISTA = 0x404040; // Cinza chumbo
+>>>>>>> e1e35f5fce1e34025affaf7058e89b8639a610a3
 
 function pontoNaElipse(cx, cy, raioX, raioY, angulo) {
     return {

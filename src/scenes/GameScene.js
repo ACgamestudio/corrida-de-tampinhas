@@ -205,7 +205,7 @@ class GameScene extends Phaser.Scene {
             this.scene.restart();
         });
 
-        this.botaoMenu = this.add.text(600, 570, '🏠 Menu', {
+        this.botaoMenu = this.add.text(600, 570, 'Menu', {
             fontSize: '24px',
             fontFamily: 'Arial',
             color: '#ffffff',
@@ -312,7 +312,7 @@ class GameScene extends Phaser.Scene {
     atualizarTextoTurno() {
         if (this.vencedor) { this.textoTurno.setVisible(false); return; }
         const nomeAtual = this.tampinhas[this.turnoAtual].nome;
-        this.textoTurno.setText(this.turnoAtual === 0 ? '🎯 Sua vez!' : `⏳ Vez de ${nomeAtual}...`);
+        this.textoTurno.setText(this.turnoAtual === 0 ? 'Sua vez!' : ` Vez de ${nomeAtual}...`);
         this.textoTurno.setVisible(true);
     }
 
