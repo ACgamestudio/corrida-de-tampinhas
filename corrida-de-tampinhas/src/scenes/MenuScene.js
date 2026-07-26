@@ -13,16 +13,43 @@ class MenuScene extends Phaser.Scene {
 
     preload() {
         this.load.audio('musica_menu', 'assets/audio/musica_menu.mp3');
-        this.load.image('fundoMenu', 'assets/images/menu_bg.png');
     }
 
     create() {
         criarBotaoTelaCheia(this);
         this.transicaoEmAndamento = false;
 
-        // fundo: a nova arte de capa (o próprio desenho já traz sol, pássaros e cactos)
-        this.add.image(400, 300, 'fundoMenu').setDisplaySize(800, 600);
-        this.add.rectangle(400, 300, 800, 600, 0x000000, 0.22);
+        // fundo tema quintal
+        this.add.image(400, 300, criarTexturaCimento(this));
+        this.add.rectangle(400, 300, 800, 600, 0x000000, 0.35);
+        espalharDecoracao(this);
+
+        // sol — presença quieta no fundo, respirando devagar
+        const sol = this.add.text(60, 55, '☀️', { fontSize: '46px' }).setOrigin(0.5).setAlpha(0.85);
+        this.tweens.add({
+            targets: sol,
+            alpha: 0.55,
+            scale: 1.06,
+            duration: 2600,
+            yoyo: true,
+            repeat: -1,
+            ease: 'sine.inOut'
+        });
+
+        // passarinhos — pequeno detalhe vivo no céu
+        const passaro1 = this.add.text(680, 70, '🐦', { fontSize: '22px' }).setOrigin(0.5);
+        const passaro2 = this.add.text(730, 95, '🐦', { fontSize: '18px' }).setOrigin(0.5).setAlpha(0.85);
+        this.passarinhosVisuais = [passaro1, passaro2];
+        this.passarinhosVisuais.forEach((p, i) => {
+            this.tweens.add({
+                targets: p,
+                y: p.y - 8,
+                duration: 1600 + i * 300,
+                yoyo: true,
+                repeat: -1,
+                ease: 'sine.inOut'
+            });
+        });
 
         // título
         this.add.text(400, 140, 'CORRIDA DE', {
@@ -89,6 +116,8 @@ class MenuScene extends Phaser.Scene {
     agendarSomAmbiente() {
         const proximoPassarinho = () => {
             SomFX.passarinho();
+            const ave = Phaser.Utils.Array.GetRandom(this.passarinhosVisuais);
+            this.tweens.add({ targets: ave, scaleX: 1.25, scaleY: 0.8, duration: 90, yoyo: true });
             this.timerPassarinho = this.time.delayedCall(Phaser.Math.Between(2500, 5500), proximoPassarinho);
         };
         this.timerPassarinho = this.time.delayedCall(Phaser.Math.Between(1200, 2500), proximoPassarinho);
