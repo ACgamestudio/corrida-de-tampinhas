@@ -10,9 +10,9 @@
 
 const AIRacer = {
     NIVEIS: {
-        'Fácil':   { forcaMin: 380, forcaMax: 620, agressividade: 0.5 },
-        'Médio':   { forcaMin: 480, forcaMax: 760, agressividade: 0.8 },
-        'Difícil': { forcaMin: 580, forcaMax: 900, agressividade: 1.15 }
+        'Fácil':   { forcaMin: 480, forcaMax: 700, agressividade: 0.5 },
+        'Médio':   { forcaMin: 600, forcaMax: 820, agressividade: 0.8 },
+        'Difícil': { forcaMin: 700, forcaMax: 900, agressividade: 1.15 }
     },
 
     decideMove(ia, pista, nivel = 'Médio', outros = []) {
@@ -35,7 +35,7 @@ const AIRacer = {
         const amostraAtual = pista.lut[status.indice];
         const amostraCurva = pista.amostraEmS(status.s + LOOKAHEAD_CURVA);
         const severidadeCurva = Math.abs(normalizarAngulo(amostraCurva.tangente - amostraAtual.tangente));
-        const curvFactor = Phaser.Math.Clamp(1 - severidadeCurva * 1.6, 0.6, 1);
+        const curvFactor = Phaser.Math.Clamp(1 - severidadeCurva * 1.2, 0.75, 1);
 
         // ---------- quão perto da borda está (pra reagir mais rápido se estiver quase saindo) ----------
         const proximidadeBorda = Phaser.Math.Clamp(Math.abs(status.lateral) / (pista.largura / 2), 0, 1);
@@ -65,7 +65,7 @@ const AIRacer = {
         const norm = Math.hypot(dx, dy) || 1;
 
         let força = Phaser.Math.Between(cfg.forcaMin, cfg.forcaMax) * curvFactor;
-        força *= Phaser.Math.Linear(1, 0.85, proximidadeBorda); // um pouco de cautela perto da borda
+        força *= Phaser.Math.Linear(1, 0.92, proximidadeBorda); // cautela mínima perto da borda
 
         return { dirX: dx / norm, dirY: dy / norm, força };
     }

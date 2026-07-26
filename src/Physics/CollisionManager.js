@@ -18,18 +18,21 @@ const CollisionManager = {
 
         const rvx = b.body.velocity.x - a.body.velocity.x;
         const rvy = b.body.velocity.y - a.body.velocity.y;
-        const velNormal = rvx * nx + rvy * ny;
+        const velNormal = rvx * nx + rvy * ny; // >0 = já se separando (b se afasta de a)
 
-        // reforça sempre que ainda houver aproximação — e com bem mais força que antes: o
-        // Arcade sozinho estava deixando a tampinha batida quase parada, o que não parece
-        // uma batida de verdade entre dois objetos com peso.
-        if (velNormal < 0) {
-            const REFORCO = 1.15; // fração extra somada em cima da resposta padrão do Arcade
-            const impulso = -velNormal * REFORCO;
-            a.body.velocity.x -= nx * impulso;
-            a.body.velocity.y -= ny * impulso;
-            b.body.velocity.x += nx * impulso;
-            b.body.velocity.y += ny * impulso;
+        // O Arcade já separou as duas e distribuiu velocidade entre elas antes deste callback
+        // rodar — o problema é que, com bounce moderado, essa separação sozinha fica fraca
+        // demais pra "arrancar" a tampinha atingida da pista. Em vez de só reforçar nos raros
+        // casos em que ainda estariam se aproximando (o que quase nunca acontece depois do
+        // Arcade já ter resolvido a sobreposição), a gente AMPLIFICA a separação que já existe
+        // — sempre, de forma consistente — pra a batida ficar decisiva de verdade.
+        if (velNormal > 0) {
+            const BOOST = 1.9; // separação final = separação original × BOOST
+            const extra = velNormal * (BOOST - 1) / 2;
+            a.body.velocity.x -= nx * extra;
+            a.body.velocity.y -= ny * extra;
+            b.body.velocity.x += nx * extra;
+            b.body.velocity.y += ny * extra;
         }
 
         // giro visual (cosmético, não mexe na física): impacto fora do centro — a componente
