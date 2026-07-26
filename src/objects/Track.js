@@ -8,10 +8,10 @@
 // pista, indexada por "s" (distância percorrida ao longo do traçado, em pixels), em vez de
 // ângulo a partir de um centro. Isso é o que permite curvas de verdade (não só uma oval).
 
-const MUNDO_LARGURA = 1500;
+const MUNDO_LARGURA = 2000;
 const MUNDO_ALTURA = 2400;
 
-const LARGURA_PISTA = 300;         // uniforme em toda a pista (~30% maior que a versão anterior)
+const LARGURA_PISTA = 150;         // uniforme em toda a pista (~30% maior que a versão anterior)
 const RESOLUCAO_LUT = 900;         // amostras ao redor da volta inteira
 const COR_PISTA = 0x97856a;        // tom const COR_PISTA = 0x404040; // Cinza chumbo
 
