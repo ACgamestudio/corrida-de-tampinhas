@@ -78,6 +78,19 @@ class GameScene extends Phaser.Scene {
         this.atualizarInteratividadeJogador();
 
         const grupoTampinhas = this.physics.add.group(this.tampinhas);
+
+        // IMPORTANTE: `physics.add.group(...)` reaplica os valores "padrão" do grupo em cada
+        // membro assim que ele entra — inclusive bounce (volta pra 0) e collideWorldBounds
+        // (volta pra false) — mesmo já tendo sido configurados em criarTampinha(). É um
+        // comportamento interno do Phaser (PhysicsGroup.createCallbackHandler) que sobrescreve
+        // silenciosamente essas propriedades. Sem isso, a colisão vira "grudenta" (bounce 0)
+        // em vez de crispar e separar de verdade — era essa a causa da tampinha não ser
+        // empurrada de jeito nenhum ao bater. Reaplicando aqui, depois do grupo já existir.
+        this.tampinhas.forEach(t => {
+            t.body.setBounce(0.55);
+            t.body.setCollideWorldBounds(true);
+        });
+
         this.physics.add.collider(grupoTampinhas, grupoTampinhas, (a, b) => {
             CollisionManager.resolveCapCollision(a, b);
             SomFX.colisao();
@@ -441,6 +454,12 @@ class GameScene extends Phaser.Scene {
         this.verificarFimDeTurno();
 
         this.tampinhas.forEach(t => {
+            // enquanto o jogador está mirando (arrastando), a tampinha ainda não "correu" pra
+            // lugar nenhum — ela só está sendo puxada pra trás na mão. Tratar isso como "saiu
+            // da pista" fazia a punição (câmera tremendo, teleporte) disparar todo frame
+            // enquanto a mira ficasse fora da faixa, num loop sem fim. Só valer depois de solta.
+            if (this.isDragging && t === this.jogador) return;
+
             const status = calcularStatusNaPista(this.pista, t.x, t.y);
 
             // borda "mole": segura petelecos normais (perdem velocidade e continuam na pista),
