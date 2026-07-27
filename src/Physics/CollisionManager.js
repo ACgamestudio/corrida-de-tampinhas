@@ -18,19 +18,17 @@ const CollisionManager = {
 
         const rvx = b.body.velocity.x - a.body.velocity.x;
         const rvy = b.body.velocity.y - a.body.velocity.y;
-        const velNormal = rvx * nx + rvy * ny; // >0 = já se separando (b se afasta de a)
         const velRelTotal = Math.hypot(rvx, rvy); // "energia" do impacto, sem depender do ângulo exato
 
-        if (velRelTotal > 20) {
-            // Duas fontes de empurrão, e usamos a MAIOR das duas:
-            // 1) amplifica a separação que o Arcade já calculou (bom pra batidas quase de frente)
-            // 2) um empurrão mínimo baseado na velocidade relativa TOTAL do impacto (garante que
-            //    batidas de raspão — onde a componente ao longo da normal é pequena mas a
-            //    velocidade real do choque é alta — também derrubem a tampinha atingida)
-            const BOOST = 1.9;
-            const porSeparacao = Math.max(velNormal, 0) * (BOOST - 1);
-            const porEnergia = velRelTotal * 0.85;
-            const impulso = Math.max(porSeparacao, porEnergia) / 2;
+        // qualquer toque com alguma velocidade relativa real empurra de verdade — antes o
+        // limiar (20) e a escala (0.85) deixavam o empurrão fraco demais em batidas mais leves,
+        // e o atrito constante (CapPhysics) comia esse pouquinho antes de dar pra perceber.
+        // Agora garantimos um empurrão MÍNIMO sempre que há contato de verdade, e escalamos
+        // bem mais forte com a velocidade do impacto pras batidas de cheio.
+        if (velRelTotal > 4) {
+            const IMPULSO_MINIMO = 90;   // px/s — piso, mesmo pra toques fracos
+            const FATOR_ENERGIA = 1.6;   // escala com a força do impacto
+            const impulso = Math.max(velRelTotal * FATOR_ENERGIA, IMPULSO_MINIMO) / 2;
 
             a.body.velocity.x -= nx * impulso;
             a.body.velocity.y -= ny * impulso;
