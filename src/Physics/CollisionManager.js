@@ -18,6 +18,7 @@ const CollisionManager = {
 
         const rvx = b.body.velocity.x - a.body.velocity.x;
         const rvy = b.body.velocity.y - a.body.velocity.y;
+<<<<<<< HEAD
 
         // O Arcade (bounce + massa, configurados em Cap.js) já resolve a troca de velocidade
         // sozinho — igual no protótipo original, que usava só `physics.add.collider` puro e
@@ -25,6 +26,19 @@ const CollisionManager = {
         // (mexendo direto em body.velocity aqui) brigava com essa resolução padrão e no fim
         // cancelava o empurrão em vez de somar. Então aqui a gente só faz coisa cosmética:
         // giro visual e registro do impacto pra CapPhysics/AIRacer.
+=======
+        const velRelTotal = Math.hypot(rvx, rvy); // "energia" do impacto, sem depender do ângulo exato
+
+        // qualquer toque com alguma velocidade relativa real empurra de verdade — antes o
+        // limiar (20) e a escala (0.85) deixavam o empurrão fraco demais em batidas mais leves,
+        // e o atrito constante (CapPhysics) comia esse pouquinho antes de dar pra perceber.
+        // Agora garantimos um empurrão MÍNIMO sempre que há contato de verdade, e escalamos
+        // bem mais forte com a velocidade do impacto pras batidas de cheio.
+        if (velRelTotal > 4) {
+            const IMPULSO_MINIMO = 90;   // px/s — piso, mesmo pra toques fracos
+            const FATOR_ENERGIA = 1.6;   // escala com a força do impacto
+            const impulso = Math.max(velRelTotal * FATOR_ENERGIA, IMPULSO_MINIMO) / 2;
+>>>>>>> c66d683cab3657faf523d56c9f6e2a02a279e312
 
         // giro visual: impacto fora do centro (componente tangencial da velocidade relativa)
         // faz cada tampinha "torcer" um pouco, dando sensação de peso e de batida real.
