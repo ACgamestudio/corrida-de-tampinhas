@@ -18,29 +18,16 @@ const CollisionManager = {
 
         const rvx = b.body.velocity.x - a.body.velocity.x;
         const rvy = b.body.velocity.y - a.body.velocity.y;
-        const velNormal = rvx * nx + rvy * ny; // >0 = já se separando (b se afasta de a)
-        const velRelTotal = Math.hypot(rvx, rvy); // "energia" do impacto, sem depender do ângulo exato
 
-        if (velRelTotal > 20) {
-            // Duas fontes de empurrão, e usamos a MAIOR das duas:
-            // 1) amplifica a separação que o Arcade já calculou (bom pra batidas quase de frente)
-            // 2) um empurrão mínimo baseado na velocidade relativa TOTAL do impacto (garante que
-            //    batidas de raspão — onde a componente ao longo da normal é pequena mas a
-            //    velocidade real do choque é alta — também derrubem a tampinha atingida)
-            const BOOST = 1.9;
-            const porSeparacao = Math.max(velNormal, 0) * (BOOST - 1);
-            const porEnergia = velRelTotal * 0.85;
-            const impulso = Math.max(porSeparacao, porEnergia) / 2;
+        // O Arcade (bounce + massa, configurados em Cap.js) já resolve a troca de velocidade
+        // sozinho — igual no protótipo original, que usava só `physics.add.collider` puro e
+        // funcionava direitinho. A tentativa anterior de "reforçar" o empurrão manualmente
+        // (mexendo direto em body.velocity aqui) brigava com essa resolução padrão e no fim
+        // cancelava o empurrão em vez de somar. Então aqui a gente só faz coisa cosmética:
+        // giro visual e registro do impacto pra CapPhysics/AIRacer.
 
-            a.body.velocity.x -= nx * impulso;
-            a.body.velocity.y -= ny * impulso;
-            b.body.velocity.x += nx * impulso;
-            b.body.velocity.y += ny * impulso;
-        }
-
-        // giro visual (cosmético, não mexe na física): impacto fora do centro — a componente
-        // tangencial da velocidade relativa — faz cada tampinha "torcer" um pouco, dando a
-        // sensação de peso e de impacto real baseado no ângulo da batida.
+        // giro visual: impacto fora do centro (componente tangencial da velocidade relativa)
+        // faz cada tampinha "torcer" um pouco, dando sensação de peso e de batida real.
         const tx = -ny, ty = nx;
         const velTangencial = rvx * tx + rvy * ty;
         const GIRO = 0.0025;

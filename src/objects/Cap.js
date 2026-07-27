@@ -129,6 +129,70 @@ function criarTexturaTampinha(scene, marca) {
     return chave;
 }
 
+// mão estilizada dando o peteleco — pinça (polegar + dedos) desenhada com as pontas dos dedos
+// perto do topo da textura; é aí que fica a "âncora" (origin) usada na hora de posicionar em
+// cima da tampinha, então girar o sprite gira a mão inteira em torno do ponto onde ela segura
+function criarTexturaMao(scene) {
+    const chave = 'mao_peteleco';
+    if (scene.textures.exists(chave)) return chave;
+
+    const w = 100, h = 130;
+    const pele = 0xe8ad7d, sombraPolegar = 0xc98950, contorno = 0x8a5632;
+    const g = scene.add.graphics();
+
+    g.lineStyle(3, contorno, 1);
+    g.fillStyle(pele, 1);
+
+    // punho
+    g.fillRoundedRect(33, 96, 34, 30, 8);
+    g.strokeRoundedRect(33, 96, 34, 30, 8);
+
+    // palma
+    g.fillRoundedRect(24, 50, 52, 56, 22);
+    g.strokeRoundedRect(24, 50, 52, 56, 22);
+
+    // dedos fechados (3 "bolhas" fundidas saindo do topo da palma, feito uma pinça)
+    [
+        { x: 36, cy: 38, ry: 22 },
+        { x: 50, cy: 32, ry: 26 },
+        { x: 64, cy: 38, ry: 22 }
+    ].forEach(d => {
+        g.fillEllipse(d.x, d.cy, 16, d.ry * 2);
+        g.strokeEllipse(d.x, d.cy, 16, d.ry * 2);
+    });
+
+    // polegar cruzando na frente, por cima — fecha a pinça visualmente
+    g.fillStyle(sombraPolegar, 1);
+    g.fillEllipse(58, 44, 20, 32);
+    g.lineStyle(3, contorno, 1);
+    g.strokeEllipse(58, 44, 20, 32);
+
+    g.generateTexture(chave, w, h);
+    g.destroy();
+    return chave;
+}
+
+// seta de direção — desenhada apontando pra +X (direita) com origem na cauda, pra poder girar
+// e posicionar na hora sem recalcular geometria; a cor/força vem de setTint + setScale por fora
+function criarTexturaSeta(scene) {
+    const chave = 'seta_direcao';
+    if (scene.textures.exists(chave)) return chave;
+
+    const w = 70, h = 40;
+    const g = scene.add.graphics();
+    g.lineStyle(2, 0x000000, 0.45);
+    g.fillStyle(0xffffff, 1);
+
+    g.fillRect(0, h / 2 - 6, w - 24, 12);
+    g.strokeRect(0, h / 2 - 6, w - 24, 12);
+    g.fillTriangle(w - 24, h / 2 - 18, w - 24, h / 2 + 18, w, h / 2);
+    g.strokeTriangle(w - 24, h / 2 - 18, w - 24, h / 2 + 18, w, h / 2);
+
+    g.generateTexture(chave, w, h);
+    g.destroy();
+    return chave;
+}
+
 function criarTexturaParticula(scene, chave, cor) {
     if (scene.textures.exists(chave)) return chave;
 
@@ -156,6 +220,7 @@ function criarTampinha(scene, marca, pos, pista) {
     t.body.setDrag(0, 0);
     t.body.setBounce(0.55); // colisão "de metal": crispa e separa de verdade, não é mole feito massinha
     t.body.setMass(1);
+    t.body.pushable = true; // garante que ela reage a ser empurrada numa batida (não só empurra)
     t.body.setCollideWorldBounds(true);
 
     t.nome = marca.nome;
