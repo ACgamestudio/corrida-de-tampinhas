@@ -6,6 +6,7 @@ class GameScene extends Phaser.Scene {
 
     preload() {
         this.load.image('fundoPista', 'assets/images/garage_bg.png');
+        this.load.spritesheet('mao_peteleco_anim', 'assets/images/mao_peteleco_anim.png', { frameWidth: 150, frameHeight: 245 });
         this.load.audio('musica_garagem', 'assets/audio/musica_garagem.mp3');
     }
 
@@ -104,7 +105,9 @@ class GameScene extends Phaser.Scene {
             if (!podeJogadorJogar()) return;
             this.isDragging = true;
             this.dragStart = { x: gameObject.x, y: gameObject.y };
-            this.linhaForca.setVisible(true);
+            this.maoPeteleco.setFrame(0);
+            this.maoPeteleco.setVisible(true);
+            this.setaDirecao.setVisible(true);
         });
 
         this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
@@ -129,14 +132,31 @@ class GameScene extends Phaser.Scene {
                 Phaser.Display.Color.ValueToColor(0xe74c3c),
                 100, forcaRel * 100
             );
-            this.linhaForca.setStrokeStyle(3 + forcaRel * 4, Phaser.Display.Color.GetColor(cor.r, cor.g, cor.b));
-            this.linhaForca.setTo(this.dragStart.x, this.dragStart.y, gameObject.x, gameObject.y);
+            const corHex = Phaser.Display.Color.GetColor(cor.r, cor.g, cor.b);
+
+            // ângulo de disparo: pra onde a tampinha vai voar quando soltar (oposto do puxão)
+            const anguloDisparo = Math.atan2(this.dragStart.y - gameObject.y, this.dragStart.x - gameObject.x);
+
+            // mão: "segura" a tampinha na posição puxada, com o punho arrastando pro lado do puxão
+            this.maoPeteleco.setPosition(gameObject.x, gameObject.y);
+            this.maoPeteleco.setRotation(anguloDisparo + Math.PI / 2);
+
+            // seta: começa um pouco à frente da posição de origem (onde a tampinha vai disparar
+            // de fato) e aponta na direção do tiro; cresce e muda de cor conforme a força
+            const RAIO_TAMPINHA = 30;
+            this.setaDirecao.setPosition(
+                this.dragStart.x + Math.cos(anguloDisparo) * (RAIO_TAMPINHA + 12),
+                this.dragStart.y + Math.sin(anguloDisparo) * (RAIO_TAMPINHA + 12)
+            );
+            this.setaDirecao.setRotation(anguloDisparo);
+            this.setaDirecao.setScale(0.7 + forcaRel * 1.2, 0.85 + forcaRel * 0.5);
+            this.setaDirecao.setTint(corHex);
         });
 
         this.input.on('dragend', (pointer, gameObject) => {
             if (!podeJogadorJogar()) return;
             this.isDragging = false;
-            this.linhaForca.setVisible(false);
+            this.setaDirecao.setVisible(false);
 
             SomFX.peteleco();
 
@@ -161,13 +181,39 @@ class GameScene extends Phaser.Scene {
             gameObject.x = this.dragStart.x;
             gameObject.y = this.dragStart.y;
 
+            // toca a animação real do peteleco (o vídeo virando frames) bem na posição de
+            // origem, e só esconde a mão quando ela terminar de "abrir" os dedos
+            this.maoPeteleco.setPosition(this.dragStart.x, this.dragStart.y);
+            this.maoPeteleco.play('peteleco_flick');
+            this.maoPeteleco.once('animationcomplete', () => {
+                this.maoPeteleco.setVisible(false);
+                this.maoPeteleco.setFrame(0);
+            });
+
             this.aguardandoParada = true;
         });
 
-        this.linhaForca = this.add.line(0, 0, 0, 0, 0, 0, 0x2ecc71);
-        this.linhaForca.setLineWidth(3);
-        this.linhaForca.setVisible(false);
-        this.linhaForca.setScrollFactor(1);
+        // mão que "segura" a tampinha durante o arrasto + seta indicando a direção do disparo,
+        // no lugar da linha reta de antes (ver handlers de drag acima)
+        // sprite com os frames reais do vídeo (fundo removido): frame 0 é a pinça "segurando"
+        // (mostrada durante o arrasto) e os frames seguintes são o peteleco abrindo de verdade,
+        // tocados como animação na hora de soltar. Origem no ponto onde os dedos se tocam
+        // (achado automaticamente detectando o "buraco" da pinça nos frames fechados), pra
+        // girar em torno de onde ela seguraria a tampinha.
+        this.maoPeteleco = this.add.sprite(0, 0, 'mao_peteleco_anim', 0)
+            .setOrigin(0.33, 0.42).setScale(0.65).setDepth(500).setVisible(false).setScrollFactor(1);
+
+        if (!this.anims.exists('peteleco_flick')) {
+            this.anims.create({
+                key: 'peteleco_flick',
+                frames: this.anims.generateFrameNumbers('mao_peteleco_anim', { start: 0, end: 5 }),
+                frameRate: 18,
+                repeat: 0
+            });
+        }
+
+        this.setaDirecao = this.add.image(0, 0, criarTexturaSeta(this))
+            .setOrigin(0, 0.5).setDepth(500).setVisible(false).setScrollFactor(1);
 
         this.textoVencedor = this.add.text(400, 60, '', {
             fontSize: '32px',
@@ -302,11 +348,22 @@ class GameScene extends Phaser.Scene {
                     this.focarCameraNoTurno();
 
                     if (this.turnoAtual !== 0) {
-                        this.time.delayedCall(Phaser.Math.Between(700, 1100), () => this.iaFazerJogada());
+                        this.time.delayedCall(this.atrasoIA(this.tampinhas[this.turnoAtual]), () => this.iaFazerJogada());
                     }
                 }
             }
         });
+    }
+
+    // tempo de "reação" da IA antes de jogar — quanto mais difícil o nível, mais rápido ela age
+    atrasoIA(t) {
+        const FAIXAS = {
+            'Fácil':   [900, 1400],
+            'Médio':   [650, 1000],
+            'Difícil': [350, 600]
+        };
+        const [min, max] = FAIXAS[t.nivelIA] || FAIXAS['Médio'];
+        return Phaser.Math.Between(min, max);
     }
 
     atualizarTextoTurno() {
@@ -353,7 +410,7 @@ class GameScene extends Phaser.Scene {
         this.focarCameraNoTurno();
 
         if (this.turnoAtual !== 0) {
-            this.time.delayedCall(Phaser.Math.Between(700, 1100), () => this.iaFazerJogada());
+            this.time.delayedCall(this.atrasoIA(this.tampinhas[this.turnoAtual]), () => this.iaFazerJogada());
         }
     }
 
