@@ -93,6 +93,41 @@ function desenharIcone(g, tipo, cx, cy, tam, corHex) {
     }
 }
 
+// acabamento da borda: comunica peso e atrito à primeira vista, sem precisar ler nenhum
+// número — pesada ganha aro grosso e escuro (parece reforçada), leve ganha aro fino e claro;
+// atrito alto ganha textura "emborrachada" (pontinhos foscos), atrito baixo ganha brilho extra
+// (parece polida/escorregadia)
+function desenharAcabamento(g, centro, raio, marca) {
+    const massa = marca.massa || 1;
+    const atrito = marca.atrito || 1;
+
+    if (massa >= 1.25) {
+        // pesada: aro externo grosso e escuro, tipo metal reforçado
+        g.lineStyle(5, 0x1a1a1a, 0.55);
+        g.strokeCircle(centro, centro, raio - 3);
+    } else if (massa <= 0.8) {
+        // leve: aro fino e claro, quase delicado
+        g.lineStyle(1.5, 0xffffff, 0.5);
+        g.strokeCircle(centro, centro, raio - 2);
+    }
+
+    if (atrito >= 1.15) {
+        // grip alto: pontinhos foscos ao redor, tipo borracha
+        g.fillStyle(0x000000, 0.18);
+        const pontos = 10;
+        for (let i = 0; i < pontos; i++) {
+            const ang = (Math.PI * 2 / pontos) * i;
+            const px = centro + Math.cos(ang) * (raio - 5);
+            const py = centro + Math.sin(ang) * (raio - 5);
+            g.fillCircle(px, py, 1.6);
+        }
+    } else if (atrito <= 0.8) {
+        // desliza fácil: um brilho extra, tipo superfície polida/molhada
+        g.fillStyle(0xffffff, 0.18);
+        g.fillEllipse(centro + 10, centro + 10, 20, 10);
+    }
+}
+
 function criarTexturaTampinha(scene, marca) {
     const chave = 'tampinha_' + marca.nome.replace(/\s+/g, '_');
     if (scene.textures.exists(chave)) return chave;
@@ -117,6 +152,8 @@ function criarTexturaTampinha(scene, marca) {
 
     g.fillStyle(marca.cor, 1);
     g.fillCircle(centro, centro, raio - 7);
+
+    desenharAcabamento(g, centro, raio - 7, marca);
 
     g.fillStyle(0xffffff, 0.25);
     g.fillEllipse(centro - 12, centro - 14, 26, 14);
@@ -219,8 +256,11 @@ function criarTampinha(scene, marca, pos, pista) {
     t.body.setDamping(false);
     t.body.setDrag(0, 0);
     t.body.setBounce(0.55); // colisão "de metal": crispa e separa de verdade, não é mole feito massinha
-    t.body.setMass(1);
+    t._massaOriginal = marca.massa || 1; // guardado à parte: physics.add.group() reseta body.mass pra 1
+    t.body.setMass(t._massaOriginal); // identidade: tampinhas mais pesadas resistem mais a ser empurradas
     t.body.pushable = true; // garante que ela reage a ser empurrada numa batida (não só empurra)
+    t.atritoMultiplicador = marca.atrito || 1; // usado por CapPhysics.updateAll (grip/deslize)
+    t.pitchSom = marca.pitchSom || 1;          // tom do som de peteleco/colisão dessa tampinha
     t.body.setCollideWorldBounds(true);
 
     t.nome = marca.nome;

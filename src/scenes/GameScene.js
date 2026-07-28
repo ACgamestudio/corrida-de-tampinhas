@@ -80,20 +80,21 @@ class GameScene extends Phaser.Scene {
         const grupoTampinhas = this.physics.add.group(this.tampinhas);
 
         // IMPORTANTE: `physics.add.group(...)` reaplica os valores "padrão" do grupo em cada
-        // membro assim que ele entra — inclusive bounce (volta pra 0) e collideWorldBounds
-        // (volta pra false) — mesmo já tendo sido configurados em criarTampinha(). É um
-        // comportamento interno do Phaser (PhysicsGroup.createCallbackHandler) que sobrescreve
-        // silenciosamente essas propriedades. Sem isso, a colisão vira "grudenta" (bounce 0)
-        // em vez de crispar e separar de verdade — era essa a causa da tampinha não ser
-        // empurrada de jeito nenhum ao bater. Reaplicando aqui, depois do grupo já existir.
+        // membro assim que ele entra — inclusive bounce (volta pra 0), collideWorldBounds
+        // (volta pra false) e massa (volta pra 1) — mesmo já tendo sido configurados em
+        // criarTampinha(). É um comportamento interno do Phaser (PhysicsGroup.createCallbackHandler)
+        // que sobrescreve silenciosamente essas propriedades. Sem isso, a colisão vira "grudenta"
+        // (bounce 0) e todas as tampinhas pesam igual (massa 1), perdendo a identidade de peso
+        // que cada marca deveria ter. Reaplicando aqui, depois do grupo já existir.
         this.tampinhas.forEach(t => {
             t.body.setBounce(0.55);
             t.body.setCollideWorldBounds(true);
+            t.body.setMass(t._massaOriginal);
         });
 
         this.physics.add.collider(grupoTampinhas, grupoTampinhas, (a, b) => {
             CollisionManager.resolveCapCollision(a, b);
-            SomFX.colisao();
+            SomFX.colisao((a.pitchSom + b.pitchSom) / 2);
             this.cameras.main.shake(120, 0.006);
         });
         // sem collider contra a pista: a borda é "mole" (ver CollisionManager.aplicarBordaPista,
@@ -171,7 +172,7 @@ class GameScene extends Phaser.Scene {
             this.isDragging = false;
             this.setaDirecao.setVisible(false);
 
-            SomFX.peteleco();
+            SomFX.peteleco(gameObject.pitchSom);
 
             const dx = this.dragStart.x - gameObject.x;
             const dy = this.dragStart.y - gameObject.y;
@@ -401,7 +402,7 @@ class GameScene extends Phaser.Scene {
         );
         CapPhysics.onImpulse(ia, decisao.força);
 
-        SomFX.peteleco();
+        SomFX.peteleco(ia.pitchSom);
         this.aguardandoParada = true;
     }
 

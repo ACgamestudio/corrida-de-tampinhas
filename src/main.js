@@ -46,7 +46,7 @@ const SomFX = {
         return buffer;
     },
 
-    peteleco() {
+    peteleco(pitch = 1) {
         this.iniciar();
         const t = this.ctx.currentTime;
 
@@ -55,7 +55,7 @@ const SomFX = {
 
         const filtroAgudo = this.ctx.createBiquadFilter();
         filtroAgudo.type = 'highpass';
-        filtroAgudo.frequency.setValueAtTime(3000, t);
+        filtroAgudo.frequency.setValueAtTime(3000 * pitch, t);
 
         const gainRuido = this.ctx.createGain();
         gainRuido.gain.setValueAtTime(0.5, t);
@@ -69,8 +69,8 @@ const SomFX = {
         const gainOsc = this.ctx.createGain();
 
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(500, t);
-        osc.frequency.exponentialRampToValueAtTime(180, t + 0.05);
+        osc.frequency.setValueAtTime(500 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(180 * pitch, t + 0.05);
 
         gainOsc.gain.setValueAtTime(0.15, t);
         gainOsc.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
@@ -80,7 +80,7 @@ const SomFX = {
         osc.stop(t + 0.07);
     },
 
-    colisao() {
+    colisao(pitch = 1) {
         this.iniciar();
         const t = this.ctx.currentTime;
 
@@ -89,7 +89,7 @@ const SomFX = {
 
         const filtroBanda = this.ctx.createBiquadFilter();
         filtroBanda.type = 'bandpass';
-        filtroBanda.frequency.setValueAtTime(2500, t);
+        filtroBanda.frequency.setValueAtTime(2500 * pitch, t);
         filtroBanda.Q.setValueAtTime(6, t);
 
         const gainRuido = this.ctx.createGain();
@@ -105,8 +105,8 @@ const SomFX = {
             const gain = this.ctx.createGain();
 
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(freq, t);
-            osc.frequency.exponentialRampToValueAtTime(freq * 0.7, t + 0.1);
+            osc.frequency.setValueAtTime(freq * pitch, t);
+            osc.frequency.exponentialRampToValueAtTime(freq * pitch * 0.7, t + 0.1);
 
             gain.gain.setValueAtTime(0.12, t);
             gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12 - i * 0.02);
@@ -216,15 +216,21 @@ const SomFX = {
 };
 
 // ---------- Marcas fictícias disponíveis (fonte única, usada por todas as scenes) ----------
+// massa: peso da tampinha (1 = padrão). Mais pesada = resiste mais a ser empurrada numa
+//   batida, mas também acelera menos com a mesma força de peteleco.
+// atrito: quanto ela "gruda" no cimento (1 = padrão). Mais alto = para mais rápido e
+//   controlada; mais baixo = desliza bem mais longe, mas também é mais difícil de controlar.
+// pitchSom: tom do som de impacto (1 = padrão). Mais alto = "tec" agudo (leve); mais baixo =
+//   "tum" grave (pesada).
 const MARCAS_DISPONIVEIS = [
-    { nome: 'Cola Max',    cor: 0xe74c3c, corTexto: '#ffffff', icone: 'raio' },
-    { nome: 'Refri Pop',   cor: 0x3498db, corTexto: '#ffffff', icone: 'onda' },
-    { nome: 'Cerva Gold',  cor: 0xf1c40f, corTexto: '#000000', icone: 'coroa' },
-    { nome: 'Turbo Cola',  cor: 0x2c3e50, corTexto: '#ffffff', icone: 'diamante' },
-    { nome: 'Ice Beer',    cor: 0x1abc9c, corTexto: '#000000', icone: 'gota' },
-    { nome: 'Limão Fresh', cor: 0x2ecc71, corTexto: '#000000', icone: 'estrela' },
-    { nome: 'Roxo Bomba',  cor: 0x9b59b6, corTexto: '#ffffff', icone: 'trevo' },
-    { nome: 'Laranjito',   cor: 0xe67e22, corTexto: '#000000', icone: 'sol' }
+    { nome: 'Cola Max',    cor: 0xe74c3c, corTexto: '#ffffff', icone: 'raio',     massa: 0.75, atrito: 0.85, pitchSom: 1.20, estilo: 'Ágil' },
+    { nome: 'Refri Pop',   cor: 0x3498db, corTexto: '#ffffff', icone: 'onda',     massa: 1.00, atrito: 1.00, pitchSom: 1.00, estilo: 'Equilibrada' },
+    { nome: 'Cerva Gold',  cor: 0xf1c40f, corTexto: '#000000', icone: 'coroa',    massa: 1.35, atrito: 1.10, pitchSom: 0.80, estilo: 'Pesada' },
+    { nome: 'Turbo Cola',  cor: 0x2c3e50, corTexto: '#ffffff', icone: 'diamante', massa: 0.90, atrito: 0.65, pitchSom: 1.05, estilo: 'Deslizante' },
+    { nome: 'Ice Beer',    cor: 0x1abc9c, corTexto: '#000000', icone: 'gota',     massa: 1.05, atrito: 1.30, pitchSom: 0.95, estilo: 'Controlada' },
+    { nome: 'Limão Fresh', cor: 0x2ecc71, corTexto: '#000000', icone: 'estrela',  massa: 0.70, atrito: 0.90, pitchSom: 1.25, estilo: 'Ágil leve' },
+    { nome: 'Roxo Bomba',  cor: 0x9b59b6, corTexto: '#ffffff', icone: 'trevo',    massa: 1.50, atrito: 1.15, pitchSom: 0.70, estilo: 'Tanque' },
+    { nome: 'Laranjito',   cor: 0xe67e22, corTexto: '#000000', icone: 'sol',      massa: 0.65, atrito: 0.85, pitchSom: 1.30, estilo: 'Levíssima' }
 ];
 
 // ---------- Tema "quintal": cimento, giz e decoração ----------

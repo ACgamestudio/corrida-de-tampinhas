@@ -45,7 +45,8 @@ const CapPhysics = {
                 return;
             }
 
-            const perda = (this.ATRITO_CONSTANTE + v * this.ARRASTO_PROPORCIONAL) * dt;
+            const mult = t.atritoMultiplicador || 1; // identidade: grip alto freia mais rápido, deslizante freia menos
+            const perda = (this.ATRITO_CONSTANTE * mult + v * this.ARRASTO_PROPORCIONAL * mult) * dt;
             const vNovo = Math.max(0, v - perda);
 
             if (vNovo <= this.LIMIAR_PARADA) {
