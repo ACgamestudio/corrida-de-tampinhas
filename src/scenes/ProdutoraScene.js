@@ -1,15 +1,11 @@
-// ---------- Cena da produtora: vídeo institucional + botão INICIAR ----------
-// É a PRIMEIRA cena do jogo. Não tem mais botão "ASSISTIR": assim que a cena começa,
-// já dispara um "auto clique" (iniciarReproducao) que pede tela cheia, desbloqueia o
-// AudioContext (SomFX) e já bota o vídeo pra tocar com som, tudo automaticamente.
-// Quando o vídeo termina, aparece o botão "INICIAR" (preto e branco), e é aí que
-// segue pra IntroScene.
-//
-// Aviso: navegadores (Chrome, Firefox, Safari etc.) só liberam vídeo com som e tela
-// cheia dentro de um gesto REAL do usuário (um clique de verdade). Um "auto clique"
-// disparado por código não conta como gesto pra eles, então dependendo do navegador
-// o vídeo pode começar mudo e a tela cheia pode não ser concedida — nesse caso o
-// navegador não avisa com erro, simplesmente ignora o pedido silenciosamente.
+// ---------- Cena da produtora: botão INICIAR + vídeo institucional ----------
+// É a PRIMEIRA cena do jogo. O botão "INICIAR" aparece ANTES de tudo, com o vídeo já
+// parado atrás dele. Esse clique é um gesto real do usuário — o único jeito de um
+// navegador liberar de verdade tela cheia e som tocando sozinho — então é nele que a
+// gente pede tela cheia, trava a orientação e só então bota o vídeo pra tocar. Assim a
+// tela já fica cheia desde o início do vídeo da produtora, não só depois dele.
+// Quando o vídeo termina, segue direto pra IntroScene (sem precisar de um segundo
+// clique — a tela cheia já foi concedida lá no primeiro).
 
 class ProdutoraScene extends Phaser.Scene {
     constructor() {
@@ -22,11 +18,10 @@ class ProdutoraScene extends Phaser.Scene {
 
     create() {
         this.transicaoEmAndamento = false;
-        this.botaoIniciar = null;
 
         this.add.rectangle(480, 270, 960, 540, 0x000000, 1);
 
-        // vídeo criado mas parado — só começa a tocar quando iniciarReproducao() rodar
+        // vídeo criado mas parado — só começa a tocar depois do clique em "INICIAR"
         this.video = this.add.video(480, 270, 'videoProdutora');
 
         this.video.on('created', () => {
@@ -37,33 +32,10 @@ class ProdutoraScene extends Phaser.Scene {
             this.video.setPosition(480, 270);
         });
 
-        this.video.once('complete', () => this.mostrarBotaoIniciar());
+        this.video.once('complete', () => this.iniciarJogo());
 
-        // "auto clique": dispara sozinho, sem esperar nenhum toque do jogador
-        this.iniciarReproducao();
-    }
-
-    iniciarReproducao() {
-        // pede tela cheia já de cara
-        if (this.scale.fullscreen.available && !this.scale.isFullscreen) {
-            this.scale.startFullscreen();
-        }
-
-        // tenta travar a orientação em paisagem (só funciona em navegadores/contextos que
-        // permitem — normalmente exige estar em tela cheia; falha silenciosa senão). A
-        // rotação forçada via CSS em style.css já cobre os demais casos.
-        this.travarPaisagem();
-
-        // desbloqueia o AudioContext do SomFX
-        SomFX.iniciar();
-
-        // vídeo tocando com som, sem esperar clique nenhum
-        this.video.setMute(false);
-        this.video.play(false);
-
-        // segurança: se o vídeo não disparar 'complete' por algum motivo, mostra o
-        // botão de qualquer jeito depois de um tempo, pra nunca travar o jogador aqui
-        this.time.delayedCall(12000, () => this.mostrarBotaoIniciar());
+        // botão "INICIAR" logo de cara, antes do vídeo rodar
+        this.mostrarBotaoIniciar();
     }
 
     // best-effort: nem todo navegador expõe/permite essa API (ex.: Safari iOS não tem);
@@ -78,11 +50,6 @@ class ProdutoraScene extends Phaser.Scene {
     }
 
     mostrarBotaoIniciar() {
-        if (this.botaoIniciar) return;
-        this.video.pause();
-
-        this.add.rectangle(480, 270, 960, 540, 0x000000, 0.35);
-
         const largura = 220;
         const altura = 58;
 
@@ -135,28 +102,44 @@ class ProdutoraScene extends Phaser.Scene {
             this.transicaoEmAndamento = true;
             if (tweenBalanco) { tweenBalanco.stop(); tweenBalanco = null; }
             botao.disableInteractive();
-            this.iniciarJogo(botao);
+            this.comecarVideo(botao);
         });
 
         this.botaoIniciar = botao;
         this.tweens.add({ targets: botao, alpha: 1, duration: 400 });
     }
 
-    iniciarJogo(botao) {
-        // a tela cheia já foi pedida lá no clique em "ASSISTIR" (início do vídeo da
-        // produtora); aqui só garante o caso do jogador ter saído da tela cheia
-        // manualmente nesse meio-tempo
+    // esse clique é o primeiro (e único) gesto real do usuário na página — é aqui que o
+    // navegador libera tela cheia de verdade e som tocando sozinho
+    comecarVideo(botao) {
         if (this.scale.fullscreen.available && !this.scale.isFullscreen) {
             this.scale.startFullscreen();
         }
         this.travarPaisagem();
 
-        // desbloqueia o áudio de novo — SomFX.iniciar() cria/retoma o AudioContext, e o
-        // próprio clique já dispara o "unlock" interno do Phaser Sound Manager
         SomFX.iniciar();
         SomFX.peteleco();
 
-        this.tweens.add({ targets: botao, scale: 0.94, duration: 90, yoyo: true });
+        this.tweens.add({
+            targets: botao,
+            alpha: 0,
+            scale: 0.94,
+            duration: 250,
+            onComplete: () => botao.destroy()
+        });
+
+        // vídeo tocando com som, já em tela cheia
+        this.video.setMute(false);
+        this.video.play(false);
+
+        // segurança: se o vídeo não disparar 'complete' por algum motivo, segue o jogo
+        // de qualquer jeito depois de um tempo, pra nunca travar o jogador aqui
+        this.time.delayedCall(15000, () => this.iniciarJogo());
+    }
+
+    iniciarJogo() {
+        if (this.transicaoParaJogoFeita) return;
+        this.transicaoParaJogoFeita = true;
 
         this.time.delayedCall(150, () => {
             this.cameras.main.fadeOut(300, 0, 0, 0);

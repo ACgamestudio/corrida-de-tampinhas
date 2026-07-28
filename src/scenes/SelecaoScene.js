@@ -19,11 +19,7 @@ class SelecaoScene extends Phaser.Scene {
         this.add.image(480, 270, criarTexturaMadeira(this));
 
         // moldura arredondada ao redor de toda a vitrine
-        const moldura = this.add.graphics();
-        moldura.lineStyle(6, 0xf0d9a8, 0.5);
-        moldura.strokeRoundedRect(14, 10, 932, 466, 26);
-        moldura.lineStyle(2, 0x3e2412, 0.6);
-        moldura.strokeRoundedRect(20, 16, 920, 454, 22);
+        desenharMolduraPainel(this);
 
         this.add.text(480, 40, 'ESCOLHA SUA TAMPINHA', {
             fontSize: '32px',
@@ -166,36 +162,11 @@ class SelecaoScene extends Phaser.Scene {
         });
 
         // ---------- botões ----------
-        const botaoEstilizado = (x, y, largura, altura, texto, corFundo, corBorda, corTexto, aoClicar) => {
-            const g = this.add.graphics();
-            g.fillStyle(corFundo, 0.92);
-            g.fillRoundedRect(-largura / 2, -altura / 2, largura, altura, 12);
-            g.lineStyle(3, corBorda, 1);
-            g.strokeRoundedRect(-largura / 2, -altura / 2, largura, altura, 12);
-
-            const rotulo = this.add.text(0, 0, texto, {
-                fontSize: '19px',
-                fontFamily: 'Arial',
-                fontStyle: 'bold',
-                color: corTexto
-            }).setOrigin(0.5);
-
-            const botao = this.add.container(x, y, [g, rotulo]);
-            botao.setSize(largura, altura);
-            botao.setInteractive({ useHandCursor: true });
-
-            botao.on('pointerover', () => this.tweens.add({ targets: botao, scale: 1.05, duration: 100 }));
-            botao.on('pointerout', () => this.tweens.add({ targets: botao, scale: 1, duration: 100 }));
-            botao.on('pointerdown', aoClicar);
-
-            return botao;
-        };
-
-        botaoEstilizado(180, 500, 160, 48, '←  Voltar', 0x2b2b2b, 0x555555, '#ffffff', () => {
+        criarBotaoEstilizado(this, 180, 500, 160, 48, '←  Voltar', 0x2b2b2b, 0x555555, '#ffffff', () => {
             this.scene.start('MenuScene');
         });
 
-        botaoEstilizado(780, 500, 200, 52, '✅ CONFIRMAR', 0x2ecc71, 0x1e8449, '#052e13', () => {
+        criarBotaoEstilizado(this, 780, 500, 200, 52, '✅ CONFIRMAR', 0x2ecc71, 0x1e8449, '#052e13', () => {
             JogoState.corJogador = marcaSelecionada.cor;
             JogoState.marcaJogador = marcaSelecionada.nome;
             this.scene.start('SelecaoPistaScene');

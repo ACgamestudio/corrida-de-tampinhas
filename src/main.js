@@ -362,6 +362,45 @@ function criarTexturaPedra(scene) {
     g.destroy();
     return chave;
 }
+// botão com cantos arredondados, usado nas telas de seleção (tampinha, pista) — visual
+// único e consistente: fundo colorido, borda, texto centralizado, e um leve "pulo" de
+// escala no hover/clique. Devolve o container pra quem chamou poder reposicionar se quiser.
+function criarBotaoEstilizado(scene, x, y, largura, altura, texto, corFundo, corBorda, corTexto, aoClicar) {
+    const g = scene.add.graphics();
+    g.fillStyle(corFundo, 0.92);
+    g.fillRoundedRect(-largura / 2, -altura / 2, largura, altura, 12);
+    g.lineStyle(3, corBorda, 1);
+    g.strokeRoundedRect(-largura / 2, -altura / 2, largura, altura, 12);
+
+    const rotulo = scene.add.text(0, 0, texto, {
+        fontSize: '19px',
+        fontFamily: 'Arial',
+        fontStyle: 'bold',
+        color: corTexto
+    }).setOrigin(0.5);
+
+    const botao = scene.add.container(x, y, [g, rotulo]);
+    botao.setSize(largura, altura);
+    botao.setInteractive({ useHandCursor: true });
+
+    botao.on('pointerover', () => scene.tweens.add({ targets: botao, scale: 1.05, duration: 100 }));
+    botao.on('pointerout', () => scene.tweens.add({ targets: botao, scale: 1, duration: 100 }));
+    botao.on('pointerdown', aoClicar);
+
+    return botao;
+}
+
+// moldura de madeira arredondada usada como painel em todas as telas de seleção — deixa
+// as bordas do "quadro" claras por fora e escuras por dentro, tipo um caixilho de verdade
+function desenharMolduraPainel(scene) {
+    const moldura = scene.add.graphics();
+    moldura.lineStyle(6, 0xf0d9a8, 0.5);
+    moldura.strokeRoundedRect(14, 10, 932, 466, 26);
+    moldura.lineStyle(2, 0x3e2412, 0.6);
+    moldura.strokeRoundedRect(20, 16, 920, 454, 22);
+    return moldura;
+}
+
 // botão pequeno de tela cheia, usado em todas as cenas — ativar uma vez faz o jogo ficar em
 // tela cheia através das trocas de cena também (é um estado do navegador, não da cena), então
 // funciona bem quando o celular é virado pra paisagem: sem barra de endereço comendo espaço,
