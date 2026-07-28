@@ -21,11 +21,11 @@ class MenuScene extends Phaser.Scene {
         this.transicaoEmAndamento = false;
 
         // fundo: a nova arte de capa (o próprio desenho já traz sol, pássaros e cactos)
-        this.add.image(400, 300, 'fundoMenu').setDisplaySize(800, 600);
-        this.add.rectangle(400, 300, 800, 600, 0x000000, 0.22);
+        this.add.image(480, 270, 'fundoMenu').setDisplaySize(960, 540);
+        this.add.rectangle(480, 270, 960, 540, 0x000000, 0.22);
 
         // título
-        this.add.text(400, 140, 'CORRIDA DE', {
+        this.add.text(480, 126, 'CORRIDA DE', {
             fontSize: '38px',
             fontFamily: FONTE_TITULO,
             fontStyle: '600',
@@ -34,7 +34,7 @@ class MenuScene extends Phaser.Scene {
             strokeThickness: 6
         }).setOrigin(0.5);
 
-        this.add.text(400, 188, 'TAMPINHAS', {
+        this.add.text(480, 169, 'TAMPINHAS', {
             fontSize: '50px',
             fontFamily: FONTE_TITULO,
             fontStyle: '700',
@@ -44,7 +44,7 @@ class MenuScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         // frase que traz a lembrança à tona
-        this.add.text(400, 228, '"Quem nunca brincou de corrida de tampinhas?"', {
+        this.add.text(480, 205, '"Quem nunca brincou de corrida de tampinhas?"', {
             fontSize: '16px',
             fontFamily: FONTE_TITULO,
             fontStyle: 'italic',
@@ -54,7 +54,7 @@ class MenuScene extends Phaser.Scene {
         // tampinha decorativa: usa a marca já escolhida pelo jogador (ou a padrão)
         const marcaAtual = MARCAS_DISPONIVEIS.find(m => m.nome === JogoState.marcaJogador) || MARCAS_DISPONIVEIS[0];
         const chaveTampinha = criarTexturaTampinha(this, marcaAtual);
-        this.tampinhaDecor = this.add.image(400, 320, chaveTampinha).setScale(1.3);
+        this.tampinhaDecor = this.add.image(480, 288, chaveTampinha).setScale(1.3);
 
         this.tweenGiroTampinha = this.tweens.add({
             targets: this.tampinhaDecor,
@@ -64,11 +64,11 @@ class MenuScene extends Phaser.Scene {
         });
 
         // botão — placa de madeira, não retângulo de menu
-        this.criarBotaoComecar(400, 430);
+        this.criarBotaoComecar(480, 387);
 
         // rodapé — vende a ideia do jogo em vez de expor detalhes técnicos
         const frase = Phaser.Utils.Array.GetRandom(FRASES_RODAPE);
-        this.add.text(400, 555, frase, {
+        this.add.text(480, 500, frase, {
             fontSize: '14px',
             fontFamily: FONTE_TITULO,
             fontStyle: 'italic',
@@ -177,7 +177,7 @@ class MenuScene extends Phaser.Scene {
             onComplete: () => {
                 this.tweens.add({
                     targets: this.tampinhaDecor,
-                    x: 900,
+                    x: 1080,
                     duration: 260,
                     ease: 'cubic.in'
                 });

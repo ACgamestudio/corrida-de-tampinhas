@@ -27,9 +27,9 @@ class SelecaoPistaScene extends Phaser.Scene {
     create() {
         criarBotaoTelaCheia(this);
         tocarMusicaDeFundo(this, 'musica_menu', 0.35);
-        this.add.image(400, 300, criarTexturaMadeira(this));
+        this.add.image(480, 270, criarTexturaMadeira(this));
 
-        this.add.text(400, 32, 'ESCOLHA A PISTA', {
+        this.add.text(480, 29, 'ESCOLHA A PISTA', {
             fontSize: '24px',
             fontFamily: FONTE_TITULO || 'Arial',
             color: '#fff5e0',
@@ -39,7 +39,7 @@ class SelecaoPistaScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         // ---------- carta em destaque: Garagem (única disponível por enquanto) ----------
-        const cx = 400, cy = 250;
+        const cx = 480, cy = 225;
         const largura = 300, altura = 300;
 
         this.desenharCompartimento(cx, cy, largura, altura);
@@ -89,7 +89,7 @@ class SelecaoPistaScene extends Phaser.Scene {
         zonaClique.on('pointerout', () => this.tweens.add({ targets: [preview, selo], scale: 1, duration: 120 }));
 
         // ---------- vagas "em breve", só pra mostrar que vem mais pista por aí ----------
-        const emBreve = [{ x: 140, nome: '🌆 Rua' }, { x: 660, nome: '🏖️ Praia' }];
+        const emBreve = [{ x: 168, nome: '🌆 Rua' }, { x: 792, nome: '🏖️ Praia' }];
         emBreve.forEach(({ x, nome }) => {
             this.desenharCompartimento(x, cy, 150, 300);
             this.desenharBorda(x, cy, 150, 300, 0x5b3a1f);
@@ -102,7 +102,7 @@ class SelecaoPistaScene extends Phaser.Scene {
         });
 
         // ---------- botão confirmar ----------
-        const botaoConfirmar = this.add.text(650, 560, '✅ COMEÇAR', {
+        const botaoConfirmar = this.add.text(780, 504, '✅ COMEÇAR', {
             fontSize: '22px',
             fontFamily: 'Arial',
             color: '#000000',
@@ -116,7 +116,7 @@ class SelecaoPistaScene extends Phaser.Scene {
         zonaClique.on('pointerdown', () => this.scene.start('CorridaScene'));
 
         // ---------- botão voltar ----------
-        const botaoVoltar = this.add.text(150, 560, '← Voltar', {
+        const botaoVoltar = this.add.text(180, 504, '← Voltar', {
             fontSize: '20px',
             fontFamily: 'Arial',
             color: '#ffffff',

@@ -229,7 +229,7 @@ class GameScene extends Phaser.Scene {
         this.setaDirecao = this.add.image(0, 0, criarTexturaSeta(this))
             .setOrigin(0, 0.5).setDepth(500).setVisible(false).setScrollFactor(1);
 
-        this.textoVencedor = this.add.text(400, 60, '', {
+        this.textoVencedor = this.add.text(480, 54, '', {
             fontSize: '32px',
             fontFamily: 'Arial',
             color: '#ffff00',
@@ -237,7 +237,7 @@ class GameScene extends Phaser.Scene {
             padding: { x: 10, y: 6 }
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setVisible(false);
 
-        this.textoTurno = this.add.text(400, 30, '', {
+        this.textoTurno = this.add.text(480, 27, '', {
             fontSize: '20px',
             fontFamily: FONTE_TITULO || 'Arial',
             fontStyle: '600',
@@ -246,14 +246,14 @@ class GameScene extends Phaser.Scene {
             strokeThickness: 4
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setVisible(false);
 
-        this.textoContagem = this.add.text(400, 330, '', {
+        this.textoContagem = this.add.text(480, 270, '', {
             fontSize: '80px',
             fontFamily: 'Arial',
             color: '#ffffff',
             fontStyle: 'bold'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1000);
 
-        this.botaoReiniciar = this.add.text(400, 570, '🔄 Reiniciar', {
+        this.botaoReiniciar = this.add.text(480, 510, '🔄 Reiniciar', {
             fontSize: '24px',
             fontFamily: 'Arial',
             color: '#ffffff',
@@ -265,7 +265,7 @@ class GameScene extends Phaser.Scene {
             this.scene.restart();
         });
 
-        this.botaoMenu = this.add.text(600, 570, 'Menu', {
+        this.botaoMenu = this.add.text(720, 510, 'Menu', {
             fontSize: '24px',
             fontFamily: 'Arial',
             color: '#ffffff',
@@ -282,7 +282,7 @@ class GameScene extends Phaser.Scene {
 
     // ---------- minimapa: contorno fixo da pista + um ponto por tampinha ----------
     criarMinimapa() {
-        const box = { x: 640, y: 16, w: 144, h: 110 };
+        const box = { x: 800, y: 16, w: 144, h: 110 };
         this.minimapaEscala = { x: box.w / MUNDO_LARGURA, y: box.h / MUNDO_ALTURA, box };
 
         const fundo = this.add.rectangle(box.x + box.w / 2, box.y + box.h / 2, box.w + 8, box.h + 8, 0x000000, 0.45)

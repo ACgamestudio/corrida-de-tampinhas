@@ -238,7 +238,7 @@ function criarTexturaCimento(scene) {
     const chave = 'fundo_cimento';
     if (scene.textures.exists(chave)) return chave;
 
-    const w = 800, h = 600;
+    const w = 960, h = 540;
     const g = scene.add.graphics();
 
     g.fillStyle(0xb5b0a6, 1);
@@ -334,7 +334,7 @@ function criarTexturaPedra(scene) {
 function criarBotaoTelaCheia(scene) {
     if (!scene.scale.fullscreen.available) return null; // ex.: Safari iOS mais antigo não suporta
 
-    const botao = scene.add.text(34, 566, '⛶', {
+    const botao = scene.add.text(34, 506, '⛶', {
         fontSize: '22px',
         fontFamily: 'Arial',
         color: '#ffffff',
@@ -361,7 +361,7 @@ function criarTexturaMadeira(scene) {
     const chave = 'fundo_madeira';
     if (scene.textures.exists(chave)) return chave;
 
-    const w = 800, h = 600;
+    const w = 960, h = 540;
     const g = scene.add.graphics();
 
     g.fillStyle(0x8b5a2b, 1);
@@ -571,8 +571,8 @@ function espalharDecoracao(scene) {
 
 const config = {
     type: Phaser.AUTO,
-    width: 800,
-    height: 600,
+    width: 960,
+    height: 540,
     parent: "game",
     backgroundColor: "#8b8b8b",
     scale: {
@@ -585,7 +585,7 @@ const config = {
             debug: false
         }
     },
-    scene: [MenuScene, SelecaoScene, SelecaoPistaScene, GameScene]
+    scene: [IntroScene, MenuScene, SelecaoScene, SelecaoPistaScene, GameScene]
 };
 
 function iniciarJogo() {

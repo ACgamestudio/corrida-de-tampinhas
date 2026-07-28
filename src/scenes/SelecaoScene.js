@@ -26,9 +26,9 @@ class SelecaoScene extends Phaser.Scene {
     create() {
         criarBotaoTelaCheia(this);
         tocarMusicaDeFundo(this, 'musica_menu', 0.35);
-        this.add.image(400, 300, criarTexturaMadeira(this));
+        this.add.image(480, 270, criarTexturaMadeira(this));
 
-        this.add.text(400, 32, 'ESCOLHA SUA TAMPINHA', {
+        this.add.text(480, 29, 'ESCOLHA SUA TAMPINHA', {
             fontSize: '24px',
             fontFamily: 'Arial',
             color: '#fff5e0',
@@ -40,13 +40,13 @@ class SelecaoScene extends Phaser.Scene {
         let marcaSelecionada = MARCAS_DISPONIVEIS.find(m => m.nome === JogoState.marcaJogador) || MARCAS_DISPONIVEIS[0];
 
         // ---------- vitrine de destaque (compartimento grande no topo) ----------
-        this.desenharCompartimento(400, 135, 150, 120);
-        this.desenharBorda(400, 135, 150, 120, 0xffd700);
+        this.desenharCompartimento(480, 122, 150, 120);
+        this.desenharBorda(480, 122, 150, 120, 0xffd700);
 
         const chavePreview = criarTexturaTampinha(this, marcaSelecionada);
-        const preview = this.add.image(400, 125, chavePreview).setScale(1.3);
+        const preview = this.add.image(480, 113, chavePreview).setScale(1.3);
 
-        const previewTexto = this.add.text(400, 180, marcaSelecionada.nome, {
+        const previewTexto = this.add.text(480, 162, marcaSelecionada.nome, {
             fontSize: '15px',
             fontFamily: 'Arial',
             fontStyle: 'bold',
@@ -57,9 +57,9 @@ class SelecaoScene extends Phaser.Scene {
 
         // ---------- prateleira com compartimentos (grade) ----------
         const colunas = 4;
-        const espacamento = 100;
-        const inicioX = 400 - ((colunas - 1) * espacamento) / 2;
-        const y = 330;
+        const espacamento = 120;
+        const inicioX = 480 - ((colunas - 1) * espacamento) / 2;
+        const y = 297;
 
         const opcoes = [];
 
@@ -67,7 +67,7 @@ class SelecaoScene extends Phaser.Scene {
             const col = i % colunas;
             const linha = Math.floor(i / colunas);
             const x = inicioX + col * espacamento;
-            const yPos = y + linha * 115;
+            const yPos = y + linha * 104;
 
             this.desenharCompartimento(x, yPos, 84, 84);
             const corBorda = marca.nome === marcaSelecionada.nome ? 0xffd700 : 0x5b3a1f;
@@ -107,7 +107,7 @@ class SelecaoScene extends Phaser.Scene {
         });
 
         // ---------- botão confirmar ----------
-        const botaoConfirmar = this.add.text(650, 550, '✅ CONFIRMAR', {
+        const botaoConfirmar = this.add.text(780, 495, '✅ CONFIRMAR', {
             fontSize: '22px',
             fontFamily: 'Arial',
             color: '#000000',
@@ -125,7 +125,7 @@ class SelecaoScene extends Phaser.Scene {
         });
 
         // ---------- botão voltar ----------
-        const botaoVoltar = this.add.text(150, 550, '← Voltar', {
+        const botaoVoltar = this.add.text(180, 495, '← Voltar', {
             fontSize: '20px',
             fontFamily: 'Arial',
             color: '#ffffff',
