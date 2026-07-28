@@ -13,7 +13,7 @@ const MUNDO_ALTURA = 2000;
 
 const LARGURA_PISTA = 200;         // uniforme em toda a pista (~30% maior que a versão anterior)
 const RESOLUCAO_LUT = 900;         // amostras ao redor da volta inteira
-const COR_PISTA = 0x404040;        // tom parecido com o chão da foto de fundo, pra não conflitar
+const COR_PISTA = 0x808080;        // tom parecido com o chão da foto de fundo, pra não conflitar
 
 function pontoNaElipse(cx, cy, raioX, raioY, angulo) {
     return {
@@ -190,7 +190,7 @@ function desenharPista(scene, pista) {
     // da foto de fundo — desenhado em pequenos quadriláteros ao longo de toda a volta, o que
     // deixa um "buraco" natural na ilha central e do lado de fora, onde a foto continua visível
     const fundo = scene.add.graphics();
-    fundo.fillStyle(COR_PISTA, 1);
+    fundo.fillStyle(COR_PISTA, 0.55);
     for (let i = 0; i < lut.length; i++) {
         const a = lut[i], b = lut[(i + 1) % lut.length];
         fundo.fillPoints([
