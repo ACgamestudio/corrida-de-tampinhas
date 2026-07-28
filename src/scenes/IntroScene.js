@@ -2,6 +2,9 @@
 // O vídeo toca mudo (a trilha de fundo é a música do menu, tocando desde já) e, quando
 // termina, fica pausado no último quadro — o menu (sem o título "Corrida de Tampinhas",
 // já que o vídeo mostra isso) aparece em cima dessa imagem parada, não troca de fundo.
+//
+// O áudio já foi desbloqueado antes, no clique do botão INICIAR da ProdutoraScene — por
+// isso a música começa a tocar direto aqui, sem precisar de nenhum toque na tela.
 
 class IntroScene extends Phaser.Scene {
     constructor() {

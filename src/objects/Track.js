@@ -204,8 +204,8 @@ function desenharPista(scene, pista) {
         g.lineStyle(5, 0xffffff, 0.85);
         g.beginPath();
         lut.forEach((p, i) => {
-            const jx = p[chave + 'X'] + Phaser.Math.Between(-3, 3);
-            const jy = p[chave + 'Y'] + Phaser.Math.Between(-3, 3);
+            const jx = p[chave + 'X'];
+            const jy = p[chave + 'Y'];
             if (i === 0) g.moveTo(jx, jy); else g.lineTo(jx, jy);
         });
         g.closePath();
