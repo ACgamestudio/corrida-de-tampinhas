@@ -1,7 +1,8 @@
 // ---------- Cena de seleção de tampinha: vitrine de madeira com halo neon ----------
 // Cada tampinha fica sobre um brilho radial da própria cor (gerado em canvas, com blend
 // mode ADD por cima da madeira — é o que dá a sensação de luz de verdade, não só um
-// círculo colorido). A escolhida ganha um anel dourado e um brilho maior, pulsando.
+// círculo colorido). A escolhida fica girando sem parar (feito uma roleta), em vez de
+// só ganhar um contorno — é isso que chama atenção pra qual tá selecionada.
 class SelecaoScene extends Phaser.Scene {
     constructor() {
         super('SelecaoScene');
@@ -68,8 +69,6 @@ class SelecaoScene extends Phaser.Scene {
                 .setBlendMode(Phaser.BlendModes.ADD)
                 .setScale(ehSelecionada ? 0.95 : 0.72);
 
-            const anel = this.add.graphics();
-
             const img = this.add.image(x, y, chaveTampinha)
                 .setScale(1.42)
                 .setInteractive({ useHandCursor: true });
@@ -96,23 +95,36 @@ class SelecaoScene extends Phaser.Scene {
                 delay: i * 120
             });
 
-            const opcao = { img, halo, anel, rotulo, marca, x, y };
+            const opcao = { img, halo, rotulo, marca, x, y, tweenGiro: null };
 
-            const redesenharAnel = () => {
-                opcao.anel.clear();
+            // gira a tampinha sem parar enquanto ela for a selecionada; qualquer outra
+            // fica parada (com o ângulo voltando suavemente pra 0 se estava girando antes)
+            const atualizarGiro = () => {
                 if (opcao.marca.nome === marcaSelecionada.nome) {
-                    opcao.anel.lineStyle(3, 0xffd700, 0.95);
-                    opcao.anel.strokeCircle(opcao.x, opcao.y, 46);
+                    if (!opcao.tweenGiro) {
+                        opcao.img.setAngle(0);
+                        opcao.tweenGiro = this.tweens.add({
+                            targets: opcao.img,
+                            angle: 360,
+                            duration: 2200,
+                            repeat: -1,
+                            ease: 'Linear'
+                        });
+                    }
+                } else if (opcao.tweenGiro) {
+                    opcao.tweenGiro.stop();
+                    opcao.tweenGiro = null;
+                    this.tweens.add({ targets: opcao.img, angle: 0, duration: 200, ease: 'sine.out' });
                 }
             };
-            redesenharAnel();
+            atualizarGiro();
 
             const selecionar = () => {
                 marcaSelecionada = marca;
                 textoSelecionada.setText(marca.nome);
 
                 opcoes.forEach(o => {
-                    o.redesenharAnel();
+                    o.atualizarGiro();
                     this.tweens.add({
                         targets: o.halo,
                         scale: o.marca.nome === marcaSelecionada.nome ? 0.95 : 0.72,
@@ -123,7 +135,7 @@ class SelecaoScene extends Phaser.Scene {
 
                 SomFX.peteleco(1.3);
             };
-            opcao.redesenharAnel = redesenharAnel;
+            opcao.atualizarGiro = atualizarGiro;
             opcao.selecionar = selecionar;
 
             img.on('pointerover', () => {
