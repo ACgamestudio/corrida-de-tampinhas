@@ -46,74 +46,109 @@ const SomFX = {
         return buffer;
     },
 
+    // peteleco de verdade: o "tec" seco do dedo batendo na borda da tampinha — um clique
+    // bem curto e estalado (a unha/dedo), seguido de um "tum" curtinho e grave (o corpo da
+    // tampinha absorvendo o impacto e saindo andando). Sem ressonância longa: um peteleco
+    // real não "canta", é rápido e seco.
     peteleco(pitch = 1) {
         this.iniciar();
         const t = this.ctx.currentTime;
 
-        const ruido = this.ctx.createBufferSource();
-        ruido.buffer = this.criarRuido(0.05);
+        // estalo do dedo: transiente bem curto e muito agudo, quase só o ataque
+        const estalo = this.ctx.createBufferSource();
+        estalo.buffer = this.criarRuido(0.012);
 
-        const filtroAgudo = this.ctx.createBiquadFilter();
-        filtroAgudo.type = 'highpass';
-        filtroAgudo.frequency.setValueAtTime(3000 * pitch, t);
+        const filtroEstalo = this.ctx.createBiquadFilter();
+        filtroEstalo.type = 'bandpass';
+        filtroEstalo.frequency.setValueAtTime(5500 * pitch, t);
+        filtroEstalo.Q.setValueAtTime(1.3, t);
 
-        const gainRuido = this.ctx.createGain();
-        gainRuido.gain.setValueAtTime(0.5, t);
-        gainRuido.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+        const gainEstalo = this.ctx.createGain();
+        gainEstalo.gain.setValueAtTime(0.55, t);
+        gainEstalo.gain.exponentialRampToValueAtTime(0.001, t + 0.012);
 
-        ruido.connect(filtroAgudo).connect(gainRuido).connect(this.ctx.destination);
-        ruido.start(t);
-        ruido.stop(t + 0.05);
+        estalo.connect(filtroEstalo).connect(gainEstalo).connect(this.ctx.destination);
+        estalo.start(t);
+        estalo.stop(t + 0.014);
 
+        // clique mais seco por cima, ainda mais curto — dá a "borda" do dedo tocando
+        const clique = this.ctx.createBufferSource();
+        clique.buffer = this.criarRuido(0.006);
+
+        const filtroClique = this.ctx.createBiquadFilter();
+        filtroClique.type = 'highpass';
+        filtroClique.frequency.setValueAtTime(6500 * pitch, t);
+
+        const gainClique = this.ctx.createGain();
+        gainClique.gain.setValueAtTime(0.4, t);
+        gainClique.gain.exponentialRampToValueAtTime(0.001, t + 0.006);
+
+        clique.connect(filtroClique).connect(gainClique).connect(this.ctx.destination);
+        clique.start(t);
+        clique.stop(t + 0.007);
+
+        // "tum" curto e grave: o impacto empurrando a tampinha, sem ressoar muito
         const osc = this.ctx.createOscillator();
         const gainOsc = this.ctx.createGain();
 
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(500 * pitch, t);
-        osc.frequency.exponentialRampToValueAtTime(180 * pitch, t + 0.05);
+        osc.frequency.setValueAtTime(260 * pitch, t);
+        osc.frequency.exponentialRampToValueAtTime(90 * pitch, t + 0.045);
 
-        gainOsc.gain.setValueAtTime(0.15, t);
-        gainOsc.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+        gainOsc.gain.setValueAtTime(0.001, t);
+        gainOsc.gain.linearRampToValueAtTime(0.16, t + 0.004);
+        gainOsc.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
 
         osc.connect(gainOsc).connect(this.ctx.destination);
         osc.start(t);
-        osc.stop(t + 0.07);
+        osc.stop(t + 0.055);
     },
 
+    // metal batendo em metal: duas tampinhas se esbarrando. Diferente do peteleco (que é
+    // seco), aqui tem um "clank" com ressonância metálica de verdade — parciais fora da
+    // proporção harmônica normal (tipo sino), que é o que faz o ouvido reconhecer "metal"
+    // em vez de "madeira" ou "plástico".
     colisao(pitch = 1) {
         this.iniciar();
         const t = this.ctx.currentTime;
 
-        const ruido = this.ctx.createBufferSource();
-        ruido.buffer = this.criarRuido(0.15);
+        // impacto seco do choque (o "clack" duro do encontro das bordas)
+        const impacto = this.ctx.createBufferSource();
+        impacto.buffer = this.criarRuido(0.02);
 
-        const filtroBanda = this.ctx.createBiquadFilter();
-        filtroBanda.type = 'bandpass';
-        filtroBanda.frequency.setValueAtTime(2500 * pitch, t);
-        filtroBanda.Q.setValueAtTime(6, t);
+        const filtroImpacto = this.ctx.createBiquadFilter();
+        filtroImpacto.type = 'bandpass';
+        filtroImpacto.frequency.setValueAtTime(3200 * pitch, t);
+        filtroImpacto.Q.setValueAtTime(2.2, t);
 
-        const gainRuido = this.ctx.createGain();
-        gainRuido.gain.setValueAtTime(0.4, t);
-        gainRuido.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+        const gainImpacto = this.ctx.createGain();
+        gainImpacto.gain.setValueAtTime(0.45, t);
+        gainImpacto.gain.exponentialRampToValueAtTime(0.001, t + 0.02);
 
-        ruido.connect(filtroBanda).connect(gainRuido).connect(this.ctx.destination);
-        ruido.start(t);
-        ruido.stop(t + 0.15);
+        impacto.connect(filtroImpacto).connect(gainImpacto).connect(this.ctx.destination);
+        impacto.start(t);
+        impacto.stop(t + 0.022);
 
-        [1800, 2650].forEach((freq, i) => {
+        // ressonância metálica: parciais inarmônicos (proporções tipo sino, não múltiplos
+        // inteiros), cada um com seu próprio decaimento rápido — é isso que dá o "clang"
+        const fundamental = 950 * pitch;
+        const parciais = [1, 2.42, 3.86, 5.31];
+        parciais.forEach((razao, i) => {
             const osc = this.ctx.createOscillator();
             const gain = this.ctx.createGain();
 
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(freq * pitch, t);
-            osc.frequency.exponentialRampToValueAtTime(freq * pitch * 0.7, t + 0.1);
+            osc.frequency.setValueAtTime(fundamental * razao, t);
+            osc.frequency.exponentialRampToValueAtTime(fundamental * razao * 0.94, t + 0.13);
 
-            gain.gain.setValueAtTime(0.12, t);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12 - i * 0.02);
+            const amplitudeInicial = 0.16 / (i + 1);
+            const duracao = 0.16 - i * 0.02;
+            gain.gain.setValueAtTime(amplitudeInicial, t);
+            gain.gain.exponentialRampToValueAtTime(0.0008, t + duracao);
 
             osc.connect(gain).connect(this.ctx.destination);
             osc.start(t);
-            osc.stop(t + 0.15);
+            osc.stop(t + duracao + 0.02);
         });
     },
 
@@ -140,7 +175,7 @@ const SomFX = {
         });
     },
 
-    // "shhhlip" — água da mangueira fazendo a tampinha escorregar
+    // "shhhlip" — a tampinha escorregando na mancha de óleo
     escorregar() {
         this.iniciar();
         const t = this.ctx.currentTime;
@@ -476,43 +511,6 @@ function criarTexturaTouceira(scene) {
         g.strokePath();
     }
     g.generateTexture(chave, 20, 20);
-    g.destroy();
-    return chave;
-}
-
-// mangueira de jardim enrolada — fica do lado de fora da pista, perto do bico que molha a pista
-function criarTexturaMangueira(scene) {
-    const chave = 'decor_mangueira';
-    if (scene.textures.exists(chave)) return chave;
-
-    const tam = 46;
-    const g = scene.add.graphics();
-    g.lineStyle(6, 0x1e7a3a, 1);
-    g.beginPath();
-    g.arc(tam / 2, tam / 2, 16, 0, Math.PI * 1.7);
-    g.strokePath();
-    g.lineStyle(6, 0x249c4a, 1);
-    g.beginPath();
-    g.arc(tam / 2, tam / 2, 9, Math.PI * 0.2, Math.PI * 2);
-    g.strokePath();
-    g.fillStyle(0xcccccc, 1);
-    g.fillCircle(tam / 2, tam / 2, 4);
-    g.generateTexture(chave, tam, tam);
-    g.destroy();
-    return chave;
-}
-
-// bico da mangueira, bem na beira da pista, de onde sai o fiozinho d'água
-function criarTexturaBicoMangueira(scene) {
-    const chave = 'decor_bico_mangueira';
-    if (scene.textures.exists(chave)) return chave;
-
-    const g = scene.add.graphics();
-    g.fillStyle(0x555555, 1);
-    g.fillRoundedRect(0, 4, 20, 8, 3);
-    g.fillStyle(0x333333, 1);
-    g.fillCircle(18, 8, 5);
-    g.generateTexture(chave, 24, 16);
     g.destroy();
     return chave;
 }

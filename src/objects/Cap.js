@@ -166,6 +166,30 @@ function criarTexturaTampinha(scene, marca) {
     return chave;
 }
 
+// brilho neon suave atrás da tampinha — gradiente radial (canvas de verdade, não dá pra
+// fazer um "borrão" assim só com Graphics), com a cor da marca. Usado em telas de seleção,
+// desenhado com blend mode ADD por cima da madeira pra parecer um halo de luz de verdade.
+function criarTexturaBrilho(scene, corHex) {
+    const chave = 'brilho_' + corHex.toString(16);
+    if (scene.textures.exists(chave)) return chave;
+
+    const tam = 200;
+    const canvasTex = scene.textures.createCanvas(chave, tam, tam);
+    const ctx = canvasTex.getContext();
+    const cor = Phaser.Display.Color.ValueToColor(corHex);
+
+    const gradiente = ctx.createRadialGradient(tam / 2, tam / 2, 0, tam / 2, tam / 2, tam / 2);
+    gradiente.addColorStop(0, `rgba(${cor.red}, ${cor.green}, ${cor.blue}, 0.85)`);
+    gradiente.addColorStop(0.45, `rgba(${cor.red}, ${cor.green}, ${cor.blue}, 0.35)`);
+    gradiente.addColorStop(1, `rgba(${cor.red}, ${cor.green}, ${cor.blue}, 0)`);
+
+    ctx.fillStyle = gradiente;
+    ctx.fillRect(0, 0, tam, tam);
+    canvasTex.refresh();
+
+    return chave;
+}
+
 // mão estilizada dando o peteleco — pinça (polegar + dedos) desenhada com as pontas dos dedos
 // perto do topo da textura; é aí que fica a "âncora" (origin) usada na hora de posicionar em
 // cima da tampinha, então girar o sprite gira a mão inteira em torno do ponto onde ela segura
@@ -273,7 +297,7 @@ function criarTampinha(scene, marca, pos, pista) {
     t.progressoAcumulado = 0;
     t.sAnterior = statusInicial.s;
     t.foraDaPista = false;
-    t.molhando = false;
+    t.escorregandoOleo = false;
 
     t.rastro = scene.add.particles(0, 0, criarTexturaParticula(scene, 'particulaRastro_' + marca.nome.replace(/\s+/g, '_'), marca.cor), {
         lifespan: 250,

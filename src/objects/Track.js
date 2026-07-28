@@ -262,36 +262,37 @@ function desenharZonaEspecial(scene, pista, zona, cor, alpha) {
     return g;
 }
 
-// poça d'água + mangueira — devagar ali a tampinha escorrega pro lado
-function desenharZonaAgua(scene, pista, zona) {
-    desenharZonaEspecial(scene, pista, zona, 0x3f9fd6, 0.3);
+// mancha de óleo — poça escura e brilhante no cimento; ali o atrito quase some e a
+// tampinha escorrega bem mais longe do que o normal, de um jeito meio imprevisível
+function desenharZonaOleo(scene, pista, zona) {
+    desenharZonaEspecial(scene, pista, zona, 0x1a1a1a, 0.45);
 
-    const passos = 16;
+    // reflexo irregular (o "brilho" do óleo) — algumas manchas mais escuras e um par de
+    // reflexos esverdeados/arroxeados por cima, tipo poça de óleo de verdade
+    const passos = 10;
+    for (let m = 0; m < 4; m++) {
+        const g = scene.add.graphics();
+        const s0 = zona.sCentro - zona.meiaFaixaS + Phaser.Math.FloatBetween(0, 2 * zona.meiaFaixaS);
+        const frac0 = Phaser.Math.FloatBetween(0.2, 0.8);
+        const p0 = pista.pontoNaFaixa(s0, frac0);
+        const raio = Phaser.Math.Between(14, 30);
+        g.fillStyle(0x0d0d0d, 0.5);
+        g.fillEllipse(p0.x, p0.y, raio * 1.6, raio);
+    }
+
     const g = scene.add.graphics();
-    g.lineStyle(2, 0xffffff, 0.4);
-    for (let l = 0; l < 3; l++) {
+    for (let l = 0; l < 2; l++) {
+        const cor = l === 0 ? 0x4a7d6b : 0x5a4a7d;
+        g.lineStyle(2, cor, 0.35);
         g.beginPath();
         for (let i = 0; i <= passos; i++) {
             const t = i / passos;
-            const s = zona.sCentro - zona.meiaFaixaS * 0.7 + zona.meiaFaixaS * 1.4 * t;
-            const frac = 0.28 + l * 0.22;
+            const s = zona.sCentro - zona.meiaFaixaS * 0.6 + zona.meiaFaixaS * 1.2 * t;
+            const frac = 0.35 + l * 0.3 + Math.sin(t * 6) * 0.05;
             const p = pista.pontoNaFaixa(s, frac);
             if (i === 0) g.moveTo(p.x, p.y); else g.lineTo(p.x, p.y);
         }
         g.strokePath();
-    }
-}
-
-// trecho de grama/areia — mais atrito, a tampinha perde força mais rápido ali
-function desenharZonaAreia(scene, pista, zona) {
-    desenharZonaEspecial(scene, pista, zona, 0x9c8a4e, 0.35);
-
-    for (let i = 0; i < 10; i++) {
-        const s = zona.sCentro - zona.meiaFaixaS + Phaser.Math.FloatBetween(0, 2 * zona.meiaFaixaS);
-        const frac = Phaser.Math.FloatBetween(0.15, 0.85);
-        const p = pista.pontoNaFaixa(s, frac);
-        scene.add.image(p.x, p.y, criarTexturaTouceira(scene)).setAlpha(0.85)
-            .setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
     }
 }
 

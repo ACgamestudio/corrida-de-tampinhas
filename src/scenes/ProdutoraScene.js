@@ -49,6 +49,11 @@ class ProdutoraScene extends Phaser.Scene {
             this.scale.startFullscreen();
         }
 
+        // tenta travar a orientação em paisagem (só funciona em navegadores/contextos que
+        // permitem — normalmente exige estar em tela cheia; falha silenciosa senão). A
+        // rotação forçada via CSS em style.css já cobre os demais casos.
+        this.travarPaisagem();
+
         // desbloqueia o AudioContext do SomFX
         SomFX.iniciar();
 
@@ -59,6 +64,17 @@ class ProdutoraScene extends Phaser.Scene {
         // segurança: se o vídeo não disparar 'complete' por algum motivo, mostra o
         // botão de qualquer jeito depois de um tempo, pra nunca travar o jogador aqui
         this.time.delayedCall(12000, () => this.mostrarBotaoIniciar());
+    }
+
+    // best-effort: nem todo navegador expõe/permite essa API (ex.: Safari iOS não tem);
+    // por isso o try/catch e o .catch() na Promise — sem eles, um navegador que recusa
+    // pararia a execução do resto do jogo com um erro no console
+    travarPaisagem() {
+        try {
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('landscape').catch(() => {});
+            }
+        } catch (e) { /* API indisponível nesse navegador — a rotação via CSS já resolve */ }
     }
 
     mostrarBotaoIniciar() {
@@ -133,6 +149,7 @@ class ProdutoraScene extends Phaser.Scene {
         if (this.scale.fullscreen.available && !this.scale.isFullscreen) {
             this.scale.startFullscreen();
         }
+        this.travarPaisagem();
 
         // desbloqueia o áudio de novo — SomFX.iniciar() cria/retoma o AudioContext, e o
         // próprio clique já dispara o "unlock" interno do Phaser Sound Manager

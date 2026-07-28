@@ -1,22 +1,10 @@
+// ---------- Cena de seleção de tampinha: vitrine de madeira com halo neon ----------
+// Cada tampinha fica sobre um brilho radial da própria cor (gerado em canvas, com blend
+// mode ADD por cima da madeira — é o que dá a sensação de luz de verdade, não só um
+// círculo colorido). A escolhida ganha um anel dourado e um brilho maior, pulsando.
 class SelecaoScene extends Phaser.Scene {
     constructor() {
         super('SelecaoScene');
-    }
-
-    desenharCompartimento(x, y, largura, altura) {
-        const g = this.add.graphics();
-        g.fillStyle(0x000000, 0.35);
-        g.fillRoundedRect(x - largura / 2 + 3, y - altura / 2 + 3, largura, altura, 8);
-        g.fillStyle(0xf0e6d2, 0.14);
-        g.fillRoundedRect(x - largura / 2, y - altura / 2, largura, altura, 8);
-        return g;
-    }
-
-    desenharBorda(x, y, largura, altura, cor) {
-        const g = this.add.graphics();
-        g.lineStyle(3, cor, 1);
-        g.strokeRoundedRect(x - largura / 2, y - altura / 2, largura, altura, 8);
-        return g;
     }
 
     preload() {
@@ -26,115 +14,179 @@ class SelecaoScene extends Phaser.Scene {
     create() {
         criarBotaoTelaCheia(this);
         tocarMusicaDeFundo(this, 'musica_menu', 0.35);
+
         this.add.image(480, 270, criarTexturaMadeira(this));
 
-        this.add.text(480, 29, 'ESCOLHA SUA TAMPINHA', {
-            fontSize: '24px',
-            fontFamily: 'Arial',
+        // moldura arredondada ao redor de toda a vitrine
+        const moldura = this.add.graphics();
+        moldura.lineStyle(6, 0xf0d9a8, 0.5);
+        moldura.strokeRoundedRect(14, 10, 932, 466, 26);
+        moldura.lineStyle(2, 0x3e2412, 0.6);
+        moldura.strokeRoundedRect(20, 16, 920, 454, 22);
+
+        this.add.text(480, 40, 'ESCOLHA SUA TAMPINHA', {
+            fontSize: '32px',
+            fontFamily: (typeof FONTE_TITULO !== 'undefined' ? FONTE_TITULO : 'Arial'),
+            fontStyle: '700',
             color: '#fff5e0',
-            fontStyle: 'bold',
             stroke: '#3e2412',
-            strokeThickness: 5
+            strokeThickness: 6
         }).setOrigin(0.5);
 
         let marcaSelecionada = MARCAS_DISPONIVEIS.find(m => m.nome === JogoState.marcaJogador) || MARCAS_DISPONIVEIS[0];
 
-        // ---------- vitrine de destaque (compartimento grande no topo) ----------
-        this.desenharCompartimento(480, 122, 150, 120);
-        this.desenharBorda(480, 122, 150, 120, 0xffd700);
-
-        const chavePreview = criarTexturaTampinha(this, marcaSelecionada);
-        const preview = this.add.image(480, 113, chavePreview).setScale(1.3);
-
-        const previewTexto = this.add.text(480, 162, marcaSelecionada.nome, {
-            fontSize: '15px',
+        const textoSelecionada = this.add.text(480, 74, marcaSelecionada.nome, {
+            fontSize: '17px',
             fontFamily: 'Arial',
             fontStyle: 'bold',
-            color: '#fff5e0',
+            color: '#ffd76b',
             stroke: '#3e2412',
             strokeThickness: 3
         }).setOrigin(0.5);
 
-        // ---------- prateleira com compartimentos (grade) ----------
+        // ---------- vitrine: 4 colunas x 2 linhas, cada uma com halo neon da cor da marca ----------
         const colunas = 4;
-        const espacamento = 120;
-        const inicioX = 480 - ((colunas - 1) * espacamento) / 2;
-        const y = 297;
+        const espacamentoX = 195;
+        const espacamentoY = 168;
+        const inicioX = 480 - ((colunas - 1) * espacamentoX) / 2;
+        const inicioY = 198;
 
         const opcoes = [];
 
         MARCAS_DISPONIVEIS.forEach((marca, i) => {
             const col = i % colunas;
             const linha = Math.floor(i / colunas);
-            const x = inicioX + col * espacamento;
-            const yPos = y + linha * 104;
+            const x = inicioX + col * espacamentoX;
+            const y = inicioY + linha * espacamentoY;
 
-            this.desenharCompartimento(x, yPos, 84, 84);
-            const corBorda = marca.nome === marcaSelecionada.nome ? 0xffd700 : 0x5b3a1f;
-            const borda = this.desenharBorda(x, yPos, 84, 84, corBorda);
+            const chaveGlow = criarTexturaBrilho(this, marca.cor);
+            const chaveTampinha = criarTexturaTampinha(this, marca);
 
-            const chave = criarTexturaTampinha(this, marca);
-            const img = this.add.image(x, yPos - 8, chave).setInteractive({ useHandCursor: true });
+            const ehSelecionada = marca.nome === marcaSelecionada.nome;
 
-            const rotulo = this.add.text(x, yPos + 34, marca.nome, {
-                fontSize: '10px',
+            const halo = this.add.image(x, y, chaveGlow)
+                .setBlendMode(Phaser.BlendModes.ADD)
+                .setScale(ehSelecionada ? 0.95 : 0.72);
+
+            const anel = this.add.graphics();
+
+            const img = this.add.image(x, y, chaveTampinha)
+                .setScale(1.42)
+                .setInteractive({ useHandCursor: true });
+
+            const rotulo = this.add.text(x, y + 68, marca.nome, {
+                fontSize: '13px',
                 fontFamily: 'Arial',
+                fontStyle: 'bold',
                 color: '#fff5e0',
+                stroke: '#3e2412',
+                strokeThickness: 3,
                 align: 'center',
-                wordWrap: { width: 78 }
+                wordWrap: { width: 150 }
             }).setOrigin(0.5);
 
-            const opcao = { img, borda, rotulo, marca, x, y: yPos };
+            // balanço contínuo e sutil, pra vitrine parecer viva (não estática)
+            this.tweens.add({
+                targets: [img, halo],
+                y: y - 4,
+                duration: 1400 + i * 90,
+                yoyo: true,
+                repeat: -1,
+                ease: 'sine.inOut',
+                delay: i * 120
+            });
+
+            const opcao = { img, halo, anel, rotulo, marca, x, y };
+
+            const redesenharAnel = () => {
+                opcao.anel.clear();
+                if (opcao.marca.nome === marcaSelecionada.nome) {
+                    opcao.anel.lineStyle(3, 0xffd700, 0.95);
+                    opcao.anel.strokeCircle(opcao.x, opcao.y, 46);
+                }
+            };
+            redesenharAnel();
 
             const selecionar = () => {
                 marcaSelecionada = marca;
-                preview.setTexture(chave);
-                previewTexto.setText(marca.nome);
+                textoSelecionada.setText(marca.nome);
 
                 opcoes.forEach(o => {
-                    const cor = o.marca.nome === marcaSelecionada.nome ? 0xffd700 : 0x5b3a1f;
-                    o.borda.clear();
-                    o.borda.lineStyle(3, cor, 1);
-                    o.borda.strokeRoundedRect(o.x - 42, o.y - 42, 84, 84, 8);
+                    o.redesenharAnel();
+                    this.tweens.add({
+                        targets: o.halo,
+                        scale: o.marca.nome === marcaSelecionada.nome ? 0.95 : 0.72,
+                        duration: 220,
+                        ease: 'sine.out'
+                    });
                 });
-            };
 
-            img.on('pointerover', () => img.setScale(1.08));
-            img.on('pointerout', () => img.setScale(1));
+                SomFX.peteleco(1.3);
+            };
+            opcao.redesenharAnel = redesenharAnel;
+            opcao.selecionar = selecionar;
+
+            img.on('pointerover', () => {
+                this.tweens.add({ targets: img, scale: 1.55, duration: 140 });
+                this.tweens.add({ targets: halo, scale: opcao.marca.nome === marcaSelecionada.nome ? 1.05 : 0.82, duration: 140 });
+            });
+            img.on('pointerout', () => {
+                this.tweens.add({ targets: img, scale: 1.42, duration: 140 });
+                this.tweens.add({ targets: halo, scale: opcao.marca.nome === marcaSelecionada.nome ? 0.95 : 0.72, duration: 140 });
+            });
             img.on('pointerdown', selecionar);
 
             opcoes.push(opcao);
         });
 
-        // ---------- botão confirmar ----------
-        const botaoConfirmar = this.add.text(780, 495, '✅ CONFIRMAR', {
-            fontSize: '22px',
-            fontFamily: 'Arial',
-            color: '#000000',
-            backgroundColor: '#2ecc71',
-            padding: { x: 18, y: 10 }
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        // brilho pulsante contínuo no halo da tampinha selecionada — chama atenção sem
+        // precisar de nenhum texto extra dizendo "selecionada"
+        this.time.addEvent({
+            delay: 16,
+            loop: true,
+            callback: () => {
+                const pulso = 0.85 + Math.sin(this.time.now / 260) * 0.15;
+                opcoes.forEach(o => {
+                    if (o.marca.nome === marcaSelecionada.nome) o.halo.setAlpha(pulso);
+                    else o.halo.setAlpha(0.75);
+                });
+            }
+        });
 
-        botaoConfirmar.on('pointerover', () => botaoConfirmar.setStyle({ backgroundColor: '#27ae60' }));
-        botaoConfirmar.on('pointerout', () => botaoConfirmar.setStyle({ backgroundColor: '#2ecc71' }));
+        // ---------- botões ----------
+        const botaoEstilizado = (x, y, largura, altura, texto, corFundo, corBorda, corTexto, aoClicar) => {
+            const g = this.add.graphics();
+            g.fillStyle(corFundo, 0.92);
+            g.fillRoundedRect(-largura / 2, -altura / 2, largura, altura, 12);
+            g.lineStyle(3, corBorda, 1);
+            g.strokeRoundedRect(-largura / 2, -altura / 2, largura, altura, 12);
 
-        botaoConfirmar.on('pointerdown', () => {
+            const rotulo = this.add.text(0, 0, texto, {
+                fontSize: '19px',
+                fontFamily: 'Arial',
+                fontStyle: 'bold',
+                color: corTexto
+            }).setOrigin(0.5);
+
+            const botao = this.add.container(x, y, [g, rotulo]);
+            botao.setSize(largura, altura);
+            botao.setInteractive({ useHandCursor: true });
+
+            botao.on('pointerover', () => this.tweens.add({ targets: botao, scale: 1.05, duration: 100 }));
+            botao.on('pointerout', () => this.tweens.add({ targets: botao, scale: 1, duration: 100 }));
+            botao.on('pointerdown', aoClicar);
+
+            return botao;
+        };
+
+        botaoEstilizado(180, 500, 160, 48, '←  Voltar', 0x2b2b2b, 0x555555, '#ffffff', () => {
+            this.scene.start('MenuScene');
+        });
+
+        botaoEstilizado(780, 500, 200, 52, '✅ CONFIRMAR', 0x2ecc71, 0x1e8449, '#052e13', () => {
             JogoState.corJogador = marcaSelecionada.cor;
             JogoState.marcaJogador = marcaSelecionada.nome;
             this.scene.start('SelecaoPistaScene');
-        });
-
-        // ---------- botão voltar ----------
-        const botaoVoltar = this.add.text(180, 495, '← Voltar', {
-            fontSize: '20px',
-            fontFamily: 'Arial',
-            color: '#ffffff',
-            backgroundColor: '#333333',
-            padding: { x: 12, y: 6 }
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-
-        botaoVoltar.on('pointerdown', () => {
-            this.scene.start('MenuScene');
         });
     }
 }

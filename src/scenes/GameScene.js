@@ -22,11 +22,13 @@ class GameScene extends Phaser.Scene {
         this.pista = construirPista();
         CapPhysics.init(this);
 
-        // faixa onde a mangueira liga e molha a pista: devagar ali a tampinha escorrega pro
-        // lado — agora localizada por posição ao longo do traçado (s), não mais por ângulo
-        this.zonaAgua = { sCentro: this.pista.comprimentoTotal * 0.28, meiaFaixaS: 90, limiarVelocidade: 195 };
-        // trecho de grama/terra batida: mais atrito, perde força mais rápido ali
-        this.zonaAreia = { sCentro: this.pista.comprimentoTotal * 0.68, meiaFaixaS: 110 };
+        // manchas de óleo na pista: ali o atrito quase some e a tampinha escorrega bem mais
+        // longe (e um pouco pro lado, de forma imprevisível) — duas manchas em pontos
+        // diferentes da volta, localizadas por posição ao longo do traçado (s)
+        this.zonasOleo = [
+            { sCentro: this.pista.comprimentoTotal * 0.28, meiaFaixaS: 80 },
+            { sCentro: this.pista.comprimentoTotal * 0.68, meiaFaixaS: 95 }
+        ];
 
         this.FORCA_MAXIMA = 900;
         this.DISTANCIA_MAXIMA = 140;
@@ -44,8 +46,7 @@ class GameScene extends Phaser.Scene {
             .setOrigin(0, 0)
             .setTileScale(1, 1);
         desenharPista(this, this.pista);
-        desenharZonaAgua(this, this.pista, this.zonaAgua);
-        desenharZonaAreia(this, this.pista, this.zonaAreia);
+        this.zonasOleo.forEach(zona => desenharZonaOleo(this, this.pista, zona));
 
         // ---------- grid de largada: 4 tampinhas, 2 filas x 2 colunas, logo antes de s = 0 ----------
         const posicoesLargada = [
@@ -504,29 +505,32 @@ class GameScene extends Phaser.Scene {
                 }
                 t.foraDaPista = false;
 
-                // zona molhada da mangueira: devagar ali, a água empurra a tampinha pra fora
-                const diffAgua = diferencaS(status.s, this.zonaAgua.sCentro, this.pista.comprimentoTotal);
-                if (Math.abs(diffAgua) < this.zonaAgua.meiaFaixaS) {
-                    const velocidade = Phaser.Math.Distance.Between(0, 0, t.body.velocity.x, t.body.velocity.y);
-                    if (velocidade > 4 && velocidade < this.zonaAgua.limiarVelocidade) {
-                        const fatorEscorregao = 1 - (velocidade / this.zonaAgua.limiarVelocidade);
-                        const empurrao = fatorEscorregao * 5.5;
-                        t.body.velocity.x += status.nx * empurrao;
-                        t.body.velocity.y += status.ny * empurrao;
+                // mancha de óleo: o atrito quase some ali — devolve parte do que o atrito
+                // normal (CapPhysics) acabou de tirar nesse mesmo quadro, então a tampinha
+                // escorrega bem mais longe. Também dá um empurrãozinho lateral aleatório
+                // (pro lado que for, sorteado quando entra na mancha), simulando o
+                // deslizamento imprevisível de pisar em óleo.
+                const velocidade = Phaser.Math.Distance.Between(0, 0, t.body.velocity.x, t.body.velocity.y);
+                const emAlgumaMancha = this.zonasOleo.some(
+                    zona => Math.abs(diferencaS(status.s, zona.sCentro, this.pista.comprimentoTotal)) < zona.meiaFaixaS
+                );
 
-                        if (!t.molhando) {
-                            t.molhando = true;
-                            SomFX.escorregar();
-                            this.time.delayedCall(500, () => { t.molhando = false; });
-                        }
+                if (emAlgumaMancha && velocidade > 4) {
+                    t.body.velocity.x *= 1.045;
+                    t.body.velocity.y *= 1.045;
+
+                    if (!t.escorregandoOleo) {
+                        t.escorregandoOleo = true;
+                        t.direcaoEscorregaoOleo = Phaser.Math.RND.pick([-1, 1]);
+                        SomFX.escorregar();
+                        this.time.delayedCall(500, () => { t.escorregandoOleo = false; });
                     }
-                }
 
-                // trecho de grama/terra: mais atrito, a tampinha perde força mais rápido ali
-                const diffAreia = diferencaS(status.s, this.zonaAreia.sCentro, this.pista.comprimentoTotal);
-                if (Math.abs(diffAreia) < this.zonaAreia.meiaFaixaS) {
-                    t.body.velocity.x *= 0.965;
-                    t.body.velocity.y *= 0.965;
+                    const empurraoLateral = t.direcaoEscorregaoOleo * 2.2;
+                    t.body.velocity.x += status.nx * empurraoLateral;
+                    t.body.velocity.y += status.ny * empurraoLateral;
+                } else if (!emAlgumaMancha) {
+                    t.escorregandoOleo = false;
                 }
             }
 

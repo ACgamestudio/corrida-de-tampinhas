@@ -25,3 +25,19 @@ html, body {
     border: 2px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 0 30px rgba(0, 0, 0, 0.45);
 }
+
+/* -------- força paisagem no celular -------- */
+/* Em telas de toque, quando o aparelho está na vertical, gira a área do jogo 90° pra
+   ela já aparecer deitada, ocupando a tela inteira — igual à maioria dos jogos mobile,
+   sem precisar que o jogador gire o aparelho na mão. É pura CSS: reage sozinho a
+   qualquer mudança de orientação/redimensionamento, sem precisar de nenhum script. */
+@media screen and (orientation: portrait) and (pointer: coarse) {
+    #game {
+        top: 0;
+        left: 100%;
+        width: 100vh;
+        height: 100vw;
+        transform-origin: 0 0;
+        transform: rotate(90deg);
+    }
+}
