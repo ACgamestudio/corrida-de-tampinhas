@@ -30,15 +30,6 @@ class ProdutoraScene extends Phaser.Scene {
             const escala = Math.min(960 / vw, 540 / vh);
             this.video.setDisplaySize(vw * escala, vh * escala);
             this.video.setPosition(480, 270);
-
-            // sem isso, o Android puxa o player nativo de vídeo em tela cheia sozinho assim
-            // que o .play() roda — e isso briga com o requestFullscreen() do próprio jogo
-            // (às vezes fazendo ele ser recusado silenciosamente). playsinline mantém o
-            // vídeo dentro do canvas, deixando a tela cheia real por conta só do jogo.
-            const elVideo = this.video.video;
-            elVideo.setAttribute('playsinline', '');
-            elVideo.setAttribute('webkit-playsinline', '');
-            elVideo.playsInline = true;
         });
 
         this.video.once('complete', () => this.iniciarJogo());
@@ -122,19 +113,7 @@ class ProdutoraScene extends Phaser.Scene {
     // navegador libera tela cheia de verdade e som tocando sozinho
     comecarVideo(botao) {
         if (this.scale.fullscreen.available && !this.scale.isFullscreen) {
-            try {
-                this.scale.startFullscreen();
-                // dá pra checar depois se o navegador realmente aceitou, sem quebrar nada
-                // se ele recusar (ex.: fora de HTTPS, ou dentro de um iframe sem permissão)
-                this.time.delayedCall(300, () => {
-                    if (!this.scale.isFullscreen) {
-                        console.warn('[Corrida de Tampinhas] Tela cheia não foi concedida pelo navegador. ' +
-                            'Cheque se o jogo está rodando em HTTPS (ou localhost) e fora de um iframe sem allow="fullscreen".');
-                    }
-                });
-            } catch (e) {
-                console.warn('[Corrida de Tampinhas] Erro ao pedir tela cheia:', e);
-            }
+            this.scale.startFullscreen();
         }
         this.travarPaisagem();
 

@@ -4,42 +4,8 @@ const JogoState = {
     marcaJogador: 'Cola Max',   // nome da marca padrão, na primeira vez
     pistaEscolhida: 'garagem',  // chave da pista escolhida em SelecaoPistaScene (ver PISTAS_DISPONIVEIS)
     musicaAtual: null,          // instância de som (Phaser) da trilha tocando agora
-    musicaAtualChave: null,     // chave da trilha tocando agora, pra não reiniciar à toa
-    pontuacaoDecimos: 0         // pontuação do jogador em décimos (ver carregarPontuacaoSalva abaixo)
+    musicaAtualChave: null      // chave da trilha tocando agora, pra não reiniciar à toa
 };
-JogoState.pontuacaoDecimos = carregarPontuacaoSalva();
-
-// ---------- Pontuação do jogador: persiste entre corridas via localStorage ----------
-// Guardada em "décimos" (inteiro) em vez de número quebrado (0.2, 1.0...) porque soma
-// repetida de floats em JS acumula erro de arredondamento (0.2 + 0.2 + 0.2 !== 0.6 exato).
-// 1 vitória = 10 décimos (1,0 ponto). 1 batida = 2 décimos (0,2 ponto).
-const CHAVE_PONTUACAO_SALVA = 'corridaTampinhas_pontuacaoDecimos';
-
-// tampinha secreta: aparição rara numa corrida, vale 500,0 pontos (5000 em décimos) —
-// mesma escala usada pra vitória (10) e batida (2), só que bem maior por ser rara.
-const PONTOS_TAMPINHA_SECRETA = 5000;
-const CHANCE_TAMPINHA_SECRETA = 0.2; // 20% de chance de aparecer em cada corrida
-
-function carregarPontuacaoSalva() {
-    try {
-        const salvo = localStorage.getItem(CHAVE_PONTUACAO_SALVA);
-        const valor = salvo !== null ? parseInt(salvo, 10) : 0;
-        return Number.isFinite(valor) ? valor : 0;
-    } catch (e) {
-        return 0; // localStorage indisponível (ex.: navegação privada bloqueando) — só não persiste
-    }
-}
-
-function adicionarPontos(decimos) {
-    JogoState.pontuacaoDecimos += decimos;
-    try {
-        localStorage.setItem(CHAVE_PONTUACAO_SALVA, String(JogoState.pontuacaoDecimos));
-    } catch (e) { /* segue sem salvar */ }
-}
-
-function formatarPontuacao() {
-    return (JogoState.pontuacaoDecimos / 10).toFixed(1).replace('.', ',');
-}
 
 // toca uma trilha de fundo, mas só reinicia se for uma chave diferente da que já está tocando —
 // assim dá pra usar a mesma chamada em Menu/Seleção de tampinha/Seleção de pista (mesma
@@ -292,17 +258,15 @@ const SomFX = {
 //   controlada; mais baixo = desliza bem mais longe, mas também é mais difícil de controlar.
 // pitchSom: tom do som de impacto (1 = padrão). Mais alto = "tec" agudo (leve); mais baixo =
 //   "tum" grave (pesada).
-// pontoForte: frase curta mostrada na vitrine de seleção, resumindo em uma linha o que a
-//   combinação de massa/atrito daquela tampinha entrega de melhor numa corrida.
 const MARCAS_DISPONIVEIS = [
-    { nome: 'Cola Max',    cor: 0xe74c3c, corTexto: '#ffffff', icone: 'raio',     massa: 0.75, atrito: 0.85, pitchSom: 1.20, estilo: 'Ágil',       pontoForte: 'Arranca rápido' },
-    { nome: 'Refri Pop',   cor: 0x3498db, corTexto: '#ffffff', icone: 'onda',     massa: 1.00, atrito: 1.00, pitchSom: 1.00, estilo: 'Equilibrada', pontoForte: 'Equilíbrio total' },
-    { nome: 'Cerva Gold',  cor: 0xf1c40f, corTexto: '#000000', icone: 'coroa',    massa: 1.35, atrito: 1.10, pitchSom: 0.80, estilo: 'Pesada',      pontoForte: 'Resiste a batidas' },
-    { nome: 'Turbo Cola',  cor: 0x2c3e50, corTexto: '#ffffff', icone: 'diamante', massa: 0.90, atrito: 0.65, pitchSom: 1.05, estilo: 'Deslizante',  pontoForte: 'Desliza mais longe' },
-    { nome: 'Ice Beer',    cor: 0x1abc9c, corTexto: '#000000', icone: 'gota',     massa: 1.05, atrito: 1.30, pitchSom: 0.95, estilo: 'Controlada',  pontoForte: 'Freia com precisão' },
-    { nome: 'Limão Fresh', cor: 0x2ecc71, corTexto: '#000000', icone: 'estrela',  massa: 0.70, atrito: 0.90, pitchSom: 1.25, estilo: 'Ágil leve',   pontoForte: 'Leve na largada' },
-    { nome: 'Roxo Bomba',  cor: 0x9b59b6, corTexto: '#ffffff', icone: 'trevo',    massa: 1.50, atrito: 1.15, pitchSom: 0.70, estilo: 'Tanque',      pontoForte: 'Quase imparável' },
-    { nome: 'Laranjito',   cor: 0xe67e22, corTexto: '#000000', icone: 'sol',      massa: 0.65, atrito: 0.85, pitchSom: 1.30, estilo: 'Levíssima',   pontoForte: 'A mais rápida de largada' }
+    { nome: 'Cola Max',    cor: 0xe74c3c, corTexto: '#ffffff', icone: 'raio',     massa: 0.75, atrito: 0.85, pitchSom: 1.20, estilo: 'Ágil' },
+    { nome: 'Refri Pop',   cor: 0x3498db, corTexto: '#ffffff', icone: 'onda',     massa: 1.00, atrito: 1.00, pitchSom: 1.00, estilo: 'Equilibrada' },
+    { nome: 'Cerva Gold',  cor: 0xf1c40f, corTexto: '#000000', icone: 'coroa',    massa: 1.35, atrito: 1.10, pitchSom: 0.80, estilo: 'Pesada' },
+    { nome: 'Turbo Cola',  cor: 0x2c3e50, corTexto: '#ffffff', icone: 'diamante', massa: 0.90, atrito: 0.65, pitchSom: 1.05, estilo: 'Deslizante' },
+    { nome: 'Ice Beer',    cor: 0x1abc9c, corTexto: '#000000', icone: 'gota',     massa: 1.05, atrito: 1.30, pitchSom: 0.95, estilo: 'Controlada' },
+    { nome: 'Limão Fresh', cor: 0x2ecc71, corTexto: '#000000', icone: 'estrela',  massa: 0.70, atrito: 0.90, pitchSom: 1.25, estilo: 'Ágil leve' },
+    { nome: 'Roxo Bomba',  cor: 0x9b59b6, corTexto: '#ffffff', icone: 'trevo',    massa: 1.50, atrito: 1.15, pitchSom: 0.70, estilo: 'Tanque' },
+    { nome: 'Laranjito',   cor: 0xe67e22, corTexto: '#000000', icone: 'sol',      massa: 0.65, atrito: 0.85, pitchSom: 1.30, estilo: 'Levíssima' }
 ];
 
 // ---------- Tema "quintal": cimento, giz e decoração ----------
