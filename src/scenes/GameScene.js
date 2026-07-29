@@ -49,6 +49,9 @@ class GameScene extends Phaser.Scene {
         desenharPista(this, this.pista);
         this.zonasOleo.forEach(zona => desenharZonaOleo(this, this.pista, zona));
 
+        // ---------- tampinha secreta: aparição rara, vale 500 pontos ----------
+        this.criarTampinhaSecreta();
+
         // ---------- grid de largada: 4 tampinhas, 2 filas x 2 colunas, logo antes de s = 0 ----------
         const posicoesLargada = [
             this.pista.pontoNaFaixa(0, 0.30),
@@ -107,6 +110,21 @@ class GameScene extends Phaser.Scene {
             if (impacto > 260) {
                 this.criarFaiscas((a.x + b.x) / 2, (a.y + b.y) / 2, intensidade);
             }
+
+            // pontuação: 0,2 ponto por bater em outra tampinha. Só conta quando o próprio
+            // jogador está envolvido na batida (não em colisões entre duas IAs), com uma
+            // batida de verdade (impacto mínimo) e um intervalo curto entre pontos — sem
+            // isso, duas tampinhas grudadas disparariam o collider (e a pontuação) todo
+            // quadro enquanto ficassem em contato.
+            if ((a === this.jogador || b === this.jogador) && impacto > 60) {
+                const agora = this.time.now;
+                if (agora - this.ultimoPontoColisaoEm > 500) {
+                    this.ultimoPontoColisaoEm = agora;
+                    adicionarPontos(2);
+                    this.atualizarTextoPontuacao();
+                    this.mostrarFlutuantePontos((a.x + b.x) / 2, (a.y + b.y) / 2 - 30, '+0,2');
+                }
+            }
         });
         // sem collider contra a pista: a borda é "mole" (ver CollisionManager.aplicarBordaPista,
         // chamado a cada frame no update()) — não uma parede rígida do Arcade.
@@ -124,7 +142,7 @@ class GameScene extends Phaser.Scene {
         this.aguardandoParada = false;
 
         const podeJogadorJogar = () =>
-            this.turnoAtual === 0 && !this.aguardandoParada && this.corridaLiberada && !this.vencedor;
+            this.turnoAtual === 0 && !this.aguardandoParada && this.corridaLiberada && !this.vencedor && !this.pausadoPorMenu;
 
         this.input.on('dragstart', (pointer, gameObject) => {
             if (!podeJogadorJogar()) return;
@@ -293,7 +311,173 @@ class GameScene extends Phaser.Scene {
             this.scene.start('MenuScene');
         });
 
+        // ---------- botão de menu durante a corrida (não só na tela de vitória) ----------
+        // fica sempre visível, canto superior esquerdo, longe do minimapa e do texto de turno.
+        // Como sair no meio perde o progresso da corrida, pede confirmação antes de voltar —
+        // um toque sem querer não deve jogar fora a partida em andamento.
+        this.botaoMenuCorrida = this.add.text(34, 16, '☰ Menu', {
+            fontSize: '15px',
+            fontFamily: 'Arial',
+            color: '#ffffff',
+            backgroundColor: '#00000066',
+            padding: { x: 8, y: 4 }
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(1000).setInteractive({ useHandCursor: true });
+
+        this.botaoMenuCorrida.on('pointerover', () => this.botaoMenuCorrida.setStyle({ backgroundColor: '#000000aa' }));
+        this.botaoMenuCorrida.on('pointerout', () => this.botaoMenuCorrida.setStyle({ backgroundColor: '#00000066' }));
+        this.botaoMenuCorrida.on('pointerdown', () => this.confirmarSairParaMenu());
+
+        // ---------- pontuação: 0,2 por batida dada em outra tampinha, 1,0 por vitória ----------
+        // fica logo abaixo do botão de Menu, sempre visível; o valor é o total acumulado
+        // (persiste entre corridas, ver JogoState.pontuacaoDecimos / localStorage em main.js)
+        this.textoPontuacao = this.add.text(34, 46, '⭐ ' + formatarPontuacao() + ' pts', {
+            fontSize: '14px',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            color: '#ffd76b',
+            backgroundColor: '#00000066',
+            padding: { x: 8, y: 4 }
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(1000);
+
+        this.ultimoPontoColisaoEm = 0;
+
         this.iniciarContagem();
+    }
+
+    // texto flutuante "+0,2" / "+1,0" na posição do mundo onde o ponto foi ganho — some
+    // sozinho depois de subir e desaparecer
+    mostrarFlutuantePontos(x, y, texto) {
+        const flutuante = this.add.text(x, y, texto, {
+            fontSize: '18px',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            color: '#ffd76b',
+            stroke: '#3e2412',
+            strokeThickness: 3
+        }).setOrigin(0.5).setDepth(1500);
+
+        this.tweens.add({
+            targets: flutuante,
+            y: y - 45,
+            alpha: 0,
+            duration: 900,
+            ease: 'cubic.out',
+            onComplete: () => flutuante.destroy()
+        });
+    }
+
+    atualizarTextoPontuacao() {
+        this.textoPontuacao.setText('⭐ ' + formatarPontuacao() + ' pts');
+    }
+
+    // sorteia se a tampinha secreta aparece nesta corrida (20% de chance) e, se sim,
+    // posiciona ela num trecho aleatório da pista, longe da largada. Visual dourado
+    // brilhante com halo pulsante e giro lento, pra chamar atenção de quem passar perto —
+    // "secreta" no sentido de rara, não escondida (senão ninguém nunca acharia).
+    criarTampinhaSecreta() {
+        this.tampinhaSecreta = null;
+        if (Math.random() > CHANCE_TAMPINHA_SECRETA) return;
+
+        // entre 20% e 85% da volta, evitando ficar perto demais da largada/chegada
+        const s = this.pista.comprimentoTotal * Phaser.Math.FloatBetween(0.20, 0.85);
+        const faixaRel = Phaser.Math.FloatBetween(0.3, 0.7);
+        const pos = this.pista.pontoNaFaixa(s, faixaRel);
+
+        const marcaSecreta = { nome: 'Secreta', cor: 0xffd700, corTexto: '#3e2412', icone: 'estrela', massa: 1, atrito: 1 };
+        const chaveGlow = criarTexturaBrilho(this, 0xffd700);
+        const chaveTampinha = criarTexturaTampinha(this, marcaSecreta);
+
+        const halo = this.add.image(pos.x, pos.y, chaveGlow)
+            .setBlendMode(Phaser.BlendModes.ADD)
+            .setScale(0.85)
+            .setDepth(40);
+
+        const img = this.add.image(pos.x, pos.y, chaveTampinha)
+            .setScale(1.15)
+            .setDepth(41);
+
+        this.tweens.add({ targets: img, angle: 360, duration: 3000, repeat: -1, ease: 'Linear' });
+        this.tweens.add({
+            targets: halo, scale: 1.05, alpha: 0.6, duration: 500, yoyo: true, repeat: -1, ease: 'sine.inOut'
+        });
+        this.tweens.add({
+            targets: [img, halo], y: pos.y - 6, duration: 900, yoyo: true, repeat: -1, ease: 'sine.inOut'
+        });
+
+        this.tampinhaSecreta = { img, halo, x: pos.x, y: pos.y, coletada: false };
+    }
+
+    // checa a cada quadro se o jogador chegou perto o suficiente da tampinha secreta pra
+    // coletar — só a tampinha do próprio jogador conta (mesmo critério da pontuação por
+    // batida: é uma recompensa da sua jogada, não de uma IA passando por ali)
+    verificarColetaTampinhaSecreta() {
+        const secreta = this.tampinhaSecreta;
+        if (!secreta || secreta.coletada) return;
+
+        const distancia = Phaser.Math.Distance.Between(this.jogador.x, this.jogador.y, secreta.x, secreta.y);
+        if (distancia > 42) return;
+
+        secreta.coletada = true;
+        adicionarPontos(PONTOS_TAMPINHA_SECRETA);
+        this.atualizarTextoPontuacao();
+        this.mostrarFlutuantePontos(secreta.x, secreta.y - 30, '+500,0! 🌟');
+        SomFX.vitoria();
+        this.cameras.main.flash(250, 255, 215, 0);
+
+        this.tweens.add({
+            targets: [secreta.img, secreta.halo],
+            scale: 0,
+            alpha: 0,
+            duration: 300,
+            ease: 'back.in',
+            onComplete: () => {
+                secreta.img.destroy();
+                secreta.halo.destroy();
+            }
+        });
+    }
+
+    // pequeno overlay de confirmação por cima da corrida — pausa a jogada do jogador
+    // (podeJogadorJogar checa this.pausadoPorMenu) enquanto ele decide
+    confirmarSairParaMenu() {
+        if (this.overlayMenuAberto || this.vencedor) return;
+        this.overlayMenuAberto = true;
+        this.pausadoPorMenu = true;
+
+        const fundo = this.add.rectangle(480, 270, 960, 540, 0x000000, 0.6)
+            .setScrollFactor(0).setDepth(2000).setInteractive();
+
+        const placa = this.add.graphics().setScrollFactor(0).setDepth(2001);
+        placa.fillStyle(0x2b2b2b, 0.96);
+        placa.fillRoundedRect(480 - 190, 270 - 90, 380, 180, 14);
+        placa.lineStyle(2, 0x555555, 1);
+        placa.strokeRoundedRect(480 - 190, 270 - 90, 380, 180, 14);
+
+        const texto = this.add.text(480, 232, 'Sair da corrida e voltar\nao menu?', {
+            fontSize: '18px',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+
+        const grupo = [fundo, placa, texto];
+
+        const fechar = () => {
+            grupo.forEach(o => o.destroy());
+            botaoSim.destroy();
+            botaoCancelar.destroy();
+            this.overlayMenuAberto = false;
+            this.pausadoPorMenu = false;
+        };
+
+        const botaoSim = criarBotaoEstilizado(this, 400, 320, 150, 46, 'Sair', 0xc0392b, 0x7b241c, '#ffffff', () => {
+            this.scene.start('MenuScene');
+        });
+        botaoSim.setScrollFactor(0).setDepth(2001);
+
+        const botaoCancelar = criarBotaoEstilizado(this, 560, 320, 150, 46, 'Cancelar', 0x2b2b2b, 0x555555, '#ffffff', fechar);
+        botaoCancelar.setScrollFactor(0).setDepth(2001);
     }
 
     // ---------- minimapa: contorno fixo da pista + um ponto por tampinha ----------
@@ -439,20 +623,29 @@ class GameScene extends Phaser.Scene {
     iaFazerJogada() {
         if (this.vencedor) return;
 
-        const ia = this.tampinhas[this.turnoAtual];
-        const decisao = AIRacer.decideMove(ia, this.pista, ia.nivelIA, this.tampinhas);
+        try {
+            const ia = this.tampinhas[this.turnoAtual];
+            const decisao = AIRacer.decideMove(ia, this.pista, ia.nivelIA, this.tampinhas);
 
-        ia.body.setVelocity(
-            decisao.dirX * decisao.força,
-            decisao.dirY * decisao.força
-        );
-        CapPhysics.onImpulse(ia, decisao.força);
+            ia.body.setVelocity(
+                decisao.dirX * decisao.força,
+                decisao.dirY * decisao.força
+            );
+            CapPhysics.onImpulse(ia, decisao.força);
 
-        if (decisao.força > this.FORCA_MAXIMA * 0.55) {
-            this.criarPoeira(ia.x, ia.y, Math.atan2(-decisao.dirY, -decisao.dirX));
+            if (decisao.força > this.FORCA_MAXIMA * 0.55) {
+                this.criarPoeira(ia.x, ia.y, Math.atan2(-decisao.dirY, -decisao.dirX));
+            }
+
+            SomFX.peteleco(ia.pitchSom);
+        } catch (erro) {
+            // se a decisão da IA falhar por qualquer motivo, dá um impulso mínimo genérico
+            // em vez de travar o turno pra sempre esperando uma jogada que nunca vai vir
+            console.error('[Corrida de Tampinhas] Erro na jogada da IA (usando impulso de emergência):', erro);
+            const ia = this.tampinhas[this.turnoAtual];
+            if (ia && ia.body) ia.body.setVelocity(200, 0);
         }
 
-        SomFX.peteleco(ia.pitchSom);
         this.aguardandoParada = true;
     }
 
@@ -479,6 +672,20 @@ class GameScene extends Phaser.Scene {
     }
 
     update() {
+        try {
+            this.executarQuadro();
+        } catch (erro) {
+            // sem isso, um erro não tratado em qualquer lugar do quadro (colisão, IA,
+            // física, minimapa etc.) mata o loop inteiro do Phaser silenciosamente — o
+            // jogo trava de vez, e como o processamento de clique também roda dentro
+            // desse mesmo loop, até o botão de Menu para de responder junto. Logando o
+            // erro e seguindo pro próximo quadro, o jogo continua jogável mesmo se algo
+            // desse errado numa jogada específica.
+            console.error('[Corrida de Tampinhas] Erro no quadro (jogo continua rodando):', erro);
+        }
+    }
+
+    executarQuadro() {
         this.tampinhas.forEach(t => {
             if (t.sombra) {
                 t.sombra.x = t.x + 4;
@@ -503,6 +710,7 @@ class GameScene extends Phaser.Scene {
         CapPhysics.updateAll(this, this.tampinhas);
 
         this.verificarFimDeTurno();
+        this.verificarColetaTampinhaSecreta();
 
         this.tampinhas.forEach(t => {
             // enquanto o jogador está mirando (arrastando), a tampinha ainda não "correu" pra
@@ -587,6 +795,14 @@ class GameScene extends Phaser.Scene {
                 this.vencedor = t.nome;
                 this.tampinhaVencedora = t;
                 this.atualizarInteratividadeJogador();
+
+                // pontuação: 1,0 ponto só quando quem cruza a linha é o próprio jogador
+                // (as IAs também podem vencer a corrida, mas isso não pontua pra você)
+                if (t === this.jogador) {
+                    adicionarPontos(10);
+                    this.atualizarTextoPontuacao();
+                    this.mostrarFlutuantePontos(t.x, t.y - 50, '+1,0');
+                }
             }
         });
 

@@ -66,6 +66,19 @@ class MenuScene extends Phaser.Scene {
         // botão — placa de madeira, não retângulo de menu
         this.criarBotaoComecar(480, 387);
 
+        // pontuação total acumulada (vitórias + batidas, ver GameScene) — persiste entre
+        // sessões via localStorage, então aparece aqui mesmo antes de correr de novo
+        this.add.text(926, 24, '⭐ ' + formatarPontuacao() + ' pts', {
+            fontSize: '15px',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            color: '#ffd76b',
+            stroke: '#3e2412',
+            strokeThickness: 3,
+            backgroundColor: '#00000055',
+            padding: { x: 8, y: 4 }
+        }).setOrigin(1, 0);
+
         // rodapé — vende a ideia do jogo em vez de expor detalhes técnicos
         const frase = Phaser.Utils.Array.GetRandom(FRASES_RODAPE);
         this.add.text(480, 500, frase, {

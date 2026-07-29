@@ -69,13 +69,26 @@ class SelecaoScene extends Phaser.Scene {
                 .setScale(1.42)
                 .setInteractive({ useHandCursor: true });
 
-            const rotulo = this.add.text(x, y + 68, marca.nome, {
+            const rotulo = this.add.text(x, y + 64, marca.nome, {
                 fontSize: '13px',
                 fontFamily: 'Arial',
                 fontStyle: 'bold',
                 color: '#fff5e0',
                 stroke: '#3e2412',
                 strokeThickness: 3,
+                align: 'center',
+                wordWrap: { width: 150 }
+            }).setOrigin(0.5);
+
+            // ponto forte: uma linha curta abaixo do nome, resumindo o que a tampinha
+            // entrega de melhor (arranco, resistência, deslize, freada etc.)
+            const rotuloPontoForte = this.add.text(x, y + 80, marca.pontoForte, {
+                fontSize: '10px',
+                fontFamily: 'Arial',
+                fontStyle: 'italic',
+                color: '#ffd76b',
+                stroke: '#3e2412',
+                strokeThickness: 2,
                 align: 'center',
                 wordWrap: { width: 150 }
             }).setOrigin(0.5);
