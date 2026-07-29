@@ -38,6 +38,11 @@ const CollisionManager = {
             CapPhysics.onImpulse(a);
             CapPhysics.onImpulse(b);
         }
+
+        // intensidade do impacto (velocidade relativa no instante da batida) — devolvida pra
+        // quem chamou poder escalar efeitos (tremor de câmera, faíscas) pela força real do
+        // encontro, em vez de tratar todo toque igual a uma pancada forte.
+        return Math.hypot(rvx, rvy);
     },
 
     // ---------- borda "mole" da pista ----------

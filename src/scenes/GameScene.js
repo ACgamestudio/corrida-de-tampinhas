@@ -94,9 +94,18 @@ class GameScene extends Phaser.Scene {
         });
 
         this.physics.add.collider(grupoTampinhas, grupoTampinhas, (a, b) => {
-            CollisionManager.resolveCapCollision(a, b);
+            const impacto = CollisionManager.resolveCapCollision(a, b);
             SomFX.colisao((a.pitchSom + b.pitchSom) / 2);
-            this.cameras.main.shake(120, 0.006);
+
+            // tremor de câmera proporcional à força real da batida: um toque leve mal chacoalha,
+            // uma pancada forte sacode de verdade — sem exagero em nenhum dos dois extremos
+            const intensidade = Phaser.Math.Clamp(impacto / 850, 0, 1);
+            this.cameras.main.shake(80 + intensidade * 100, 0.002 + intensidade * 0.01);
+
+            // faíscas só nas batidas fortes — metal batendo em metal de verdade
+            if (impacto > 260) {
+                this.criarFaiscas((a.x + b.x) / 2, (a.y + b.y) / 2, intensidade);
+            }
         });
         // sem collider contra a pista: a borda é "mole" (ver CollisionManager.aplicarBordaPista,
         // chamado a cada frame no update()) — não uma parede rígida do Arcade.
@@ -192,6 +201,11 @@ class GameScene extends Phaser.Scene {
                 Math.sin(angulo) * forca
             );
             CapPhysics.onImpulse(gameObject, forca);
+
+            // poeira: só quando o peteleco sai forte de verdade — um tapa fraquinho não levanta pó
+            if (forca > this.FORCA_MAXIMA * 0.55) {
+                this.criarPoeira(this.dragStart.x, this.dragStart.y, angulo + Math.PI);
+            }
 
             gameObject.x = this.dragStart.x;
             gameObject.y = this.dragStart.y;
@@ -305,6 +319,36 @@ class GameScene extends Phaser.Scene {
         desenhaContorno('int');
     }
 
+    // ---------- faíscas: só nas batidas fortes entre tampinhas (metal contra metal) ----------
+    criarFaiscas(x, y, intensidade) {
+        const faiscas = this.add.particles(x, y, criarTexturaParticula(this, 'particulaFaisca', 0xfff2a8), {
+            lifespan: { min: 140, max: 260 },
+            speed: { min: 80, max: 180 + intensidade * 160 },
+            scale: { start: 0.55, end: 0 },
+            alpha: { start: 1, end: 0 },
+            tint: [0xfff2a8, 0xffd24d],
+            quantity: 1,
+            emitting: false
+        });
+        faiscas.explode(Phaser.Math.Between(4, 6) + Math.round(intensidade * 4));
+        this.time.delayedCall(300, () => faiscas.destroy());
+    }
+
+    // ---------- poeira: quando um peteleco sai forte o bastante pra "cavoucar" o cimento ----------
+    criarPoeira(x, y, angulo) {
+        const poeira = this.add.particles(x, y, criarTexturaParticula(this, 'particulaPoeira', 0xcfc9bd), {
+            lifespan: { min: 250, max: 420 },
+            speed: { min: 20, max: 70 },
+            angle: { min: Phaser.Math.RadToDeg(angulo) - 40, max: Phaser.Math.RadToDeg(angulo) + 40 },
+            scale: { start: 0.35, end: 0.9 },
+            alpha: { start: 0.35, end: 0 },
+            quantity: 1,
+            emitting: false
+        });
+        poeira.explode(5);
+        this.time.delayedCall(450, () => poeira.destroy());
+    }
+
     atualizarMinimapa() {
         const { box, x: ex, y: ey } = this.minimapaEscala;
         this.tampinhas.forEach(t => {
@@ -402,6 +446,10 @@ class GameScene extends Phaser.Scene {
             decisao.dirY * decisao.força
         );
         CapPhysics.onImpulse(ia, decisao.força);
+
+        if (decisao.força > this.FORCA_MAXIMA * 0.55) {
+            this.criarPoeira(ia.x, ia.y, Math.atan2(-decisao.dirY, -decisao.dirX));
+        }
 
         SomFX.peteleco(ia.pitchSom);
         this.aguardandoParada = true;

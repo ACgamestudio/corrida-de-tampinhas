@@ -296,6 +296,135 @@ function desenharZonaOleo(scene, pista, zona) {
     }
 }
 
+// ---------- miudezas de oficina espalhadas pela pista: parafuso, porca, chave de boca,
+// chave Philips, alicate, martelo e fita isolante. Desenhadas simples e pequenas — são
+// cenário, não devem competir visualmente com as tampinhas.
+
+function criarTexturaParafuso(scene) {
+    const chave = 'decor_parafuso';
+    if (scene.textures.exists(chave)) return chave;
+
+    const g = scene.add.graphics();
+    g.fillStyle(0x9a9a9a, 1);
+    g.fillCircle(9, 9, 8);
+    g.fillStyle(0x5f5f5f, 1);
+    g.fillCircle(9, 9, 4.5);
+    g.lineStyle(2, 0x2b2b2b, 0.9);
+    g.lineBetween(6, 9, 12, 9); // fenda da cabeça do parafuso
+    g.generateTexture(chave, 18, 18);
+    g.destroy();
+    return chave;
+}
+
+function criarTexturaPorca(scene) {
+    const chave = 'decor_porca';
+    if (scene.textures.exists(chave)) return chave;
+
+    const g = scene.add.graphics();
+    const cx = 9, cy = 9, r = 8;
+    g.fillStyle(0x707070, 1);
+    const hex = [];
+    for (let i = 0; i < 6; i++) {
+        const a = (Math.PI / 3) * i - Math.PI / 6;
+        hex.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+    }
+    g.fillPoints(hex, true);
+    g.fillStyle(0x2b2b2b, 1);
+    g.fillCircle(cx, cy, 3.2); // furo central
+    g.generateTexture(chave, 18, 18);
+    g.destroy();
+    return chave;
+}
+
+function criarTexturaChaveDeBoca(scene) {
+    const chave = 'decor_chave_boca';
+    if (scene.textures.exists(chave)) return chave;
+
+    const w = 34, h = 12;
+    const g = scene.add.graphics();
+    g.fillStyle(0x8f8f8f, 1);
+    g.fillRoundedRect(4, h / 2 - 2.5, w - 8, 5, 2); // cabo
+    g.fillCircle(w - 4, h / 2, 6); // cabeça de anel
+    g.fillStyle(0x3d3d3d, 1);
+    g.fillCircle(w - 4, h / 2, 2.6);
+    g.fillStyle(0x8f8f8f, 1);
+    g.fillTriangle(2, h / 2 - 4, 2, h / 2 + 4, 9, h / 2); // ponta de boca aberta
+    g.generateTexture(chave, w, h);
+    g.destroy();
+    return chave;
+}
+
+function criarTexturaChavePhillips(scene) {
+    const chave = 'decor_chave_phillips';
+    if (scene.textures.exists(chave)) return chave;
+
+    const w = 30, h = 10;
+    const g = scene.add.graphics();
+    g.fillStyle(0xc0392b, 1);
+    g.fillRoundedRect(0, h / 2 - 3.5, 13, 7, 3); // cabo vermelho
+    g.fillStyle(0xb0b0b0, 1);
+    g.fillRect(12, h / 2 - 1.6, w - 12, 3.2); // haste metálica
+    g.lineStyle(1.5, 0x4a4a4a, 0.9);
+    g.lineBetween(w - 2, h / 2 - 2, w - 2, h / 2 + 2);
+    g.generateTexture(chave, w, h);
+    g.destroy();
+    return chave;
+}
+
+function criarTexturaAlicate(scene) {
+    const chave = 'decor_alicate';
+    if (scene.textures.exists(chave)) return chave;
+
+    const w = 30, h = 26;
+    const g = scene.add.graphics();
+    g.lineStyle(3.5, 0x707070, 1);
+    // dois cabos cruzando num pivô (formato de "X" aberto, clássico de alicate)
+    g.lineBetween(2, h - 2, 15, 11);
+    g.lineBetween(w - 2, h - 2, 15, 11);
+    g.fillStyle(0xd9534f, 1);
+    g.fillCircle(4, h - 3, 3.4); // cabo com borracha (alça)
+    g.fillCircle(w - 4, h - 3, 3.4);
+    g.fillStyle(0x8f8f8f, 1);
+    g.fillTriangle(15, 11, 9, 0, 15, 3); // bico superior
+    g.fillTriangle(15, 11, 21, 0, 15, 3);
+    g.generateTexture(chave, w, h);
+    g.destroy();
+    return chave;
+}
+
+function criarTexturaMartelo(scene) {
+    const chave = 'decor_martelo';
+    if (scene.textures.exists(chave)) return chave;
+
+    const w = 32, h = 30;
+    const g = scene.add.graphics();
+    g.fillStyle(0x8a5a2b, 1);
+    g.fillRoundedRect(13, 8, 5, 20, 2); // cabo de madeira
+    g.fillStyle(0x555555, 1);
+    g.fillRoundedRect(2, 0, 26, 11, 2); // cabeça
+    g.fillStyle(0x3a3a3a, 0.7);
+    g.fillRect(2, 0, 8, 11); // orelha de arrancar prego, num dos lados
+    g.generateTexture(chave, w, h);
+    g.destroy();
+    return chave;
+}
+
+function criarTexturaFitaIsolante(scene) {
+    const chave = 'decor_fita_isolante';
+    if (scene.textures.exists(chave)) return chave;
+
+    const g = scene.add.graphics();
+    g.fillStyle(0x1a1a1a, 1);
+    g.fillCircle(10, 10, 9);
+    g.fillStyle(0x2b2b2b, 1);
+    g.fillCircle(10, 10, 6);
+    g.fillStyle(0x000000, 1);
+    g.fillCircle(10, 10, 3); // miolo do rolo
+    g.generateTexture(chave, 20, 20);
+    g.destroy();
+    return chave;
+}
+
 // espalha decoração ao longo de toda a borda externa da pista grande
 function espalharDecoracaoNaPista(scene, pista) {
     const miudos = [criarTexturaFolha(scene), criarTexturaPedra(scene)];
@@ -312,13 +441,32 @@ function espalharDecoracaoNaPista(scene, pista) {
         scene.add.image(p.x, p.y, tipo).setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2)).setAlpha(0.85);
     }
 
-    for (let i = 0; i < 45; i++) {
+    // ferramentas de oficina esquecidas nas laterais da pista — parafusos e porcas soltos,
+    // mais fartos (são pequenos e discretos); ferramentas maiores (chaves, alicate, martelo,
+    // fita isolante), mais raras
+    const miudosOficina = [criarTexturaParafuso(scene), criarTexturaPorca(scene)];
+    for (let i = 0; i < 40; i++) {
         const s = Phaser.Math.FloatBetween(0, pista.comprimentoTotal);
-        const margem = Phaser.Math.Between(20, 90);
+        const margem = Phaser.Math.Between(25, 100);
         const a = pista.amostraEmS(s);
         const p = { x: a.extX + a.nx * margem, y: a.extY + a.ny * margem };
         if (p.x < 0 || p.x > MUNDO_LARGURA || p.y < 0 || p.y > MUNDO_ALTURA) continue;
-        scene.add.image(p.x, p.y, criarTexturaTouceira(scene)).setAlpha(0.9);
+        scene.add.image(p.x, p.y, Phaser.Utils.Array.GetRandom(miudosOficina))
+            .setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2)).setAlpha(0.9);
+    }
+
+    const ferramentasGrandes = [
+        criarTexturaChaveDeBoca(scene), criarTexturaChavePhillips(scene),
+        criarTexturaAlicate(scene), criarTexturaMartelo(scene), criarTexturaFitaIsolante(scene)
+    ];
+    for (let i = 0; i < 16; i++) {
+        const s = Phaser.Math.FloatBetween(0, pista.comprimentoTotal);
+        const margem = Phaser.Math.Between(70, 190); // principalmente nas laterais, longe da faixa
+        const a = pista.amostraEmS(s);
+        const p = { x: a.extX + a.nx * margem, y: a.extY + a.ny * margem };
+        if (p.x < 0 || p.x > MUNDO_LARGURA || p.y < 0 || p.y > MUNDO_ALTURA) continue;
+        scene.add.image(p.x, p.y, Phaser.Utils.Array.GetRandom(ferramentasGrandes))
+            .setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2)).setAlpha(0.9);
     }
 
     const pontosDecor = [];
@@ -328,16 +476,16 @@ function espalharDecoracaoNaPista(scene, pista) {
         const a = pista.amostraEmS(s);
         pontosDecor.push({ x: a.extX + a.nx * margem, y: a.extY + a.ny * margem });
     }
+    // algumas ferramentas um pouco mais perto do centro da pista, só pra enriquecer o cenário
+    // sem nunca bloquear a faixa de corrida (ficam do lado de fora dela, perto da borda)
     Phaser.Utils.Array.Shuffle(pontosDecor).slice(0, 4).forEach(pos => {
         if (pos.x < 20 || pos.x > MUNDO_LARGURA - 20 || pos.y < 20 || pos.y > MUNDO_ALTURA - 20) return;
-        scene.add.image(pos.x, pos.y, criarTexturaVaso(scene)).setRotation(Phaser.Math.FloatBetween(-0.08, 0.08));
+        scene.add.image(pos.x, pos.y, Phaser.Utils.Array.GetRandom(ferramentasGrandes))
+            .setRotation(Phaser.Math.FloatBetween(-0.3, 0.3)).setAlpha(0.9);
     });
-    const cantoChinelo = pontosDecor[4] || pontosDecor[0];
-    scene.add.image(cantoChinelo.x + 14, cantoChinelo.y + 6, criarTexturaChinelo(scene))
-        .setRotation(Phaser.Math.FloatBetween(-0.5, 0.5)).setAlpha(0.9);
 }
 
-// decora a ilha central com um vasinho e algumas pedrinhas
+// decora a ilha central com ferramentas e algumas pedrinhas
 function decorarIlhaCentral(scene, pista) {
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     pista.lut.forEach(p => {
@@ -347,7 +495,8 @@ function decorarIlhaCentral(scene, pista) {
     const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
     const raioX = (maxX - minX) / 2 * 0.55, raioY = (maxY - minY) / 2 * 0.55;
 
-    scene.add.image(cx, cy - raioY * 0.3, criarTexturaVaso(scene)).setScale(1.4);
+    scene.add.image(cx, cy - raioY * 0.3, criarTexturaMartelo(scene)).setScale(1.6)
+        .setRotation(Phaser.Math.FloatBetween(-0.2, 0.2));
 
     for (let i = 0; i < 10; i++) {
         const angulo = Phaser.Math.FloatBetween(0, Math.PI * 2);
