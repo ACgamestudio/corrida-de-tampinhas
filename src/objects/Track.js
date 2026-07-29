@@ -15,11 +15,88 @@ const LARGURA_PISTA = 200;         // uniforme em toda a pista (~30% maior que a
 const RESOLUCAO_LUT = 900;         // amostras ao redor da volta inteira
 const COR_PISTA = 0x808080;        // tom parecido com o chão da foto de fundo, pra não conflitar
 
-function pontoNaElipse(cx, cy, raioX, raioY, angulo) {
-    return {
-        x: cx + Math.cos(angulo) * raioX,
-        y: cy + Math.sin(angulo) * raioY
-    };
+// ---------- traçados disponíveis: cada preset é só a "receita" harmônica do contorno em
+// volta do centro (quantos pontos de controle, raio-base e alguns termos senoidais somados
+// em cima). Presets com mais termos/frequências mais altas viram voltas com mais curvas —
+// é isso que diferencia visualmente cada pista, mesmo usando o mesmo motor de spline.
+// metadados de cada pista disponível na tela de seleção: nome de exibição, arquivo de fundo
+// e uma linha de descrição — usados tanto por SelecaoPistaScene quanto por GameScene, pra
+// não duplicar essa lista em dois lugares diferentes
+const PISTAS_DISPONIVEIS = {
+    garagem: {
+        nome: '🏠 GARAGEM', arquivo: 'assets/images/garage_bg.png',
+        descricao: 'Curvas de verdade no chão da garagem de casa'
+    },
+    praia: {
+        nome: '🏖️ PRAIA', arquivo: 'assets/images/praia_bg.png',
+        descricao: 'Volta serpenteando na areia, cheia de curva'
+    },
+    calcada: {
+        nome: '🚧 CALÇADA', arquivo: 'assets/images/calcada_bg.png',
+        descricao: 'Ziguezague apertado no ladrilho da calçada'
+    }
+};
+
+const PISTA_PRESETS = {
+    // traçado original: 2 curvas largas por "lado", poucas ondulações — uma volta clássica
+    garagem: {
+        N: 16, rxBase: 1000, ryBase: 780,
+        termosRx: [{ amp: 90, freq: 2, fase: 0.4 }, { amp: 25, freq: 3, fase: -0.9 }],
+        termosRy: [{ amp: 75, freq: 2, fase: -0.3 }, { amp: 20, freq: 3, fase: 1.2 }]
+    },
+    // mais serpenteante: frequências mais altas (3 e 5) dão bem mais curvas ao longo da volta
+    praia: {
+        N: 20, rxBase: 950, ryBase: 720,
+        termosRx: [{ amp: 150, freq: 3, fase: 0.6 }, { amp: 55, freq: 5, fase: -1.1 }],
+        termosRy: [{ amp: 120, freq: 3, fase: -0.5 }, { amp: 45, freq: 5, fase: 0.8 }]
+    },
+    // três camadas de ondulação (2, 4 e 6) — curvas de tamanhos variados na mesma volta,
+    // um traçado mais "quebrado" que o da praia, tipo ziguezague de calçada
+    calcada: {
+        N: 18, rxBase: 980, ryBase: 760,
+        termosRx: [{ amp: 130, freq: 2, fase: 1.0 }, { amp: 65, freq: 4, fase: -0.4 }, { amp: 30, freq: 6, fase: 0.7 }],
+        termosRy: [{ amp: 100, freq: 2, fase: -0.6 }, { amp: 50, freq: 4, fase: 0.9 }, { amp: 22, freq: 6, fase: -0.3 }]
+    }
+};
+
+// monta os pontos de controle a partir de um preset — `escala` encolhe todas as ondulações
+// igualmente, usado pelo verificador de segurança logo abaixo pra "domar" um traçado gerado
+// forte demais até ele parar de se autointersectar, sem precisar mexer no preset à mão
+function gerarPontosDeControle(preset, escala = 1) {
+    const { N, rxBase, ryBase, termosRx, termosRy } = preset;
+    const centro = { x: MUNDO_LARGURA / 2, y: MUNDO_ALTURA / 2 - 50 };
+    const pontos = [];
+    for (let i = 0; i < N; i++) {
+        const a = i * (Math.PI * 2 / N);
+        const rx = rxBase + termosRx.reduce((soma, tm) => soma + tm.amp * escala * Math.sin(tm.freq * a + tm.fase), 0);
+        const ry = ryBase + termosRy.reduce((soma, tm) => soma + tm.amp * escala * Math.sin(tm.freq * a + tm.fase), 0);
+        pontos.push({ x: centro.x + Math.cos(a) * rx, y: centro.y + Math.sin(a) * ry });
+    }
+    return { pontos, centro };
+}
+
+// verifica, numa amostragem rápida (baixa resolução), se o traçado não "pincha" nem se
+// autointersecta: pega só pontos suficientemente distantes um do outro AO LONGO da volta
+// (senão vizinhos imediatos sempre dariam falso positivo) e confere se a distância real no
+// espaço entre eles nunca fica menor que a largura da pista. Se ficar, o traçado é inseguro.
+function traçadoEhSeguro(pontos, largura) {
+    const AMOSTRAS = 140;
+    const brutos = [];
+    for (let i = 0; i < AMOSTRAS; i++) {
+        brutos.push(catmullRomPonto(pontos, (i / AMOSTRAS) * pontos.length));
+    }
+    const separacaoMinima = Math.max(6, Math.round(AMOSTRAS * 0.12));
+    const distanciaSegura = largura * 1.15;
+
+    for (let i = 0; i < AMOSTRAS; i++) {
+        for (let j = i + 1; j < AMOSTRAS; j++) {
+            const separacaoCircular = Math.min(j - i, AMOSTRAS - (j - i));
+            if (separacaoCircular < separacaoMinima) continue; // vizinhos na mesma curva: ignora
+            const d = Phaser.Math.Distance.Between(brutos[i].x, brutos[i].y, brutos[j].x, brutos[j].y);
+            if (d < distanciaSegura) return false;
+        }
+    }
+    return true;
 }
 
 // Catmull-Rom uniforme (tensão padrão), fechada: t contínuo em [0, pontos.length)
@@ -45,26 +122,21 @@ function catmullRomPonto(pontos, t) {
     return { x, y };
 }
 
-// monta os pontos de controle do traçado — uma volta grande com retas e curvas largas,
-// amplitude calibrada (testada numericamente) pra nunca formar curva mais fechada do que a
-// largura da pista permite, então nunca "pincha" nem se autointersecta.
-function gerarPontosDeControle() {
-    const N = 16;
-    const centro = { x: MUNDO_LARGURA / 2, y: MUNDO_ALTURA / 2 - 50 };
-    const pontos = [];
-    for (let i = 0; i < N; i++) {
-        const a = i * (Math.PI * 2 / N);
-        const rx = 1000 + 90 * Math.sin(2 * a + 0.4) + 25 * Math.sin(3 * a - 0.9);
-        const ry = 780 + 75 * Math.sin(2 * a - 0.3) + 20 * Math.sin(3 * a + 1.2);
-        pontos.push({ x: centro.x + Math.cos(a) * rx, y: centro.y + Math.sin(a) * ry });
-    }
-    return { pontos, centro };
-}
-
 // constrói a pista inteira: traçado + LUT de amostras (posição, tangente, comprimento
-// acumulado "s", normal) + pontos das bordas externa/interna (largura uniforme)
-function construirPista() {
-    const { pontos, centro } = gerarPontosDeControle();
+// acumulado "s", normal) + pontos das bordas externa/interna (largura uniforme).
+// `presetKey` escolhe o traçado (ver PISTA_PRESETS); se o traçado gerado pelo preset se
+// autointersectar (raro, mas possível com amplitudes altas), a função encolhe as ondulações
+// automaticamente e tenta de novo, até achar uma volta segura.
+function construirPista(presetKey = 'garagem') {
+    const preset = PISTA_PRESETS[presetKey] || PISTA_PRESETS.garagem;
+
+    let escala = 1;
+    let candidato = gerarPontosDeControle(preset, escala);
+    for (let tentativa = 0; tentativa < 6 && !traçadoEhSeguro(candidato.pontos, LARGURA_PISTA); tentativa++) {
+        escala *= 0.85;
+        candidato = gerarPontosDeControle(preset, escala);
+    }
+    const { pontos, centro } = candidato;
     const n = pontos.length;
 
     const brutos = [];
@@ -190,7 +262,7 @@ function desenharPista(scene, pista) {
     // da foto de fundo — desenhado em pequenos quadriláteros ao longo de toda a volta, o que
     // deixa um "buraco" natural na ilha central e do lado de fora, onde a foto continua visível
     const fundo = scene.add.graphics();
-    fundo.fillStyle(COR_PISTA, 0.90);
+    fundo.fillStyle(COR_PISTA, 0.55);
     for (let i = 0; i < lut.length; i++) {
         const a = lut[i], b = lut[(i + 1) % lut.length];
         fundo.fillPoints([

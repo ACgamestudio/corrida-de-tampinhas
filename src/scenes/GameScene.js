@@ -5,7 +5,8 @@ class GameScene extends Phaser.Scene {
     }
 
     preload() {
-        this.load.image('fundoPista', 'assets/images/garage_bg.png');
+        const infoPista = PISTAS_DISPONIVEIS[JogoState.pistaEscolhida] || PISTAS_DISPONIVEIS.garagem;
+        this.load.image('fundoPista', infoPista.arquivo);
         this.load.spritesheet('mao_peteleco_anim', 'assets/images/mao_peteleco_anim.png', { frameWidth: 150, frameHeight: 245 });
         this.load.audio('musica_garagem', 'assets/audio/musica_garagem.mp3');
     }
@@ -19,7 +20,7 @@ class GameScene extends Phaser.Scene {
         this.vencedor = null;
         this.corridaLiberada = false;
 
-        this.pista = construirPista();
+        this.pista = construirPista(JogoState.pistaEscolhida || 'garagem');
         CapPhysics.init(this);
 
         // manchas de óleo na pista: ali o atrito quase some e a tampinha escorrega bem mais
@@ -123,7 +124,7 @@ class GameScene extends Phaser.Scene {
         this.aguardandoParada = false;
 
         const podeJogadorJogar = () =>
-            this.turnoAtual === 0 && !this.aguardandoParada && this.corridaLiberada && !this.vencedor;
+            this.turnoAtual === 0 && !this.aguardandoParada && this.corridaLiberada && !this.vencedor && !this.pausadoPorMenu;
 
         this.input.on('dragstart', (pointer, gameObject) => {
             if (!podeJogadorJogar()) return;
@@ -292,7 +293,66 @@ class GameScene extends Phaser.Scene {
             this.scene.start('MenuScene');
         });
 
+        // ---------- botão de menu durante a corrida (não só na tela de vitória) ----------
+        // fica sempre visível, canto superior esquerdo, longe do minimapa e do texto de turno.
+        // Como sair no meio perde o progresso da corrida, pede confirmação antes de voltar —
+        // um toque sem querer não deve jogar fora a partida em andamento.
+        this.botaoMenuCorrida = this.add.text(34, 16, '☰ Menu', {
+            fontSize: '15px',
+            fontFamily: 'Arial',
+            color: '#ffffff',
+            backgroundColor: '#00000066',
+            padding: { x: 8, y: 4 }
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(1000).setInteractive({ useHandCursor: true });
+
+        this.botaoMenuCorrida.on('pointerover', () => this.botaoMenuCorrida.setStyle({ backgroundColor: '#000000aa' }));
+        this.botaoMenuCorrida.on('pointerout', () => this.botaoMenuCorrida.setStyle({ backgroundColor: '#00000066' }));
+        this.botaoMenuCorrida.on('pointerdown', () => this.confirmarSairParaMenu());
+
         this.iniciarContagem();
+    }
+
+    // pequeno overlay de confirmação por cima da corrida — pausa a jogada do jogador
+    // (podeJogadorJogar checa this.pausadoPorMenu) enquanto ele decide
+    confirmarSairParaMenu() {
+        if (this.overlayMenuAberto || this.vencedor) return;
+        this.overlayMenuAberto = true;
+        this.pausadoPorMenu = true;
+
+        const fundo = this.add.rectangle(480, 270, 960, 540, 0x000000, 0.6)
+            .setScrollFactor(0).setDepth(2000).setInteractive();
+
+        const placa = this.add.graphics().setScrollFactor(0).setDepth(2001);
+        placa.fillStyle(0x2b2b2b, 0.96);
+        placa.fillRoundedRect(480 - 190, 270 - 90, 380, 180, 14);
+        placa.lineStyle(2, 0x555555, 1);
+        placa.strokeRoundedRect(480 - 190, 270 - 90, 380, 180, 14);
+
+        const texto = this.add.text(480, 232, 'Sair da corrida e voltar\nao menu?', {
+            fontSize: '18px',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+
+        const grupo = [fundo, placa, texto];
+
+        const fechar = () => {
+            grupo.forEach(o => o.destroy());
+            botaoSim.destroy();
+            botaoCancelar.destroy();
+            this.overlayMenuAberto = false;
+            this.pausadoPorMenu = false;
+        };
+
+        const botaoSim = criarBotaoEstilizado(this, 400, 320, 150, 46, 'Sair', 0xc0392b, 0x7b241c, '#ffffff', () => {
+            this.scene.start('MenuScene');
+        });
+        botaoSim.setScrollFactor(0).setDepth(2001);
+
+        const botaoCancelar = criarBotaoEstilizado(this, 560, 320, 150, 46, 'Cancelar', 0x2b2b2b, 0x555555, '#ffffff', fechar);
+        botaoCancelar.setScrollFactor(0).setDepth(2001);
     }
 
     // ---------- minimapa: contorno fixo da pista + um ponto por tampinha ----------
