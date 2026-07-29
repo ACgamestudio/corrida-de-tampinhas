@@ -190,7 +190,7 @@ function desenharPista(scene, pista) {
     // da foto de fundo — desenhado em pequenos quadriláteros ao longo de toda a volta, o que
     // deixa um "buraco" natural na ilha central e do lado de fora, onde a foto continua visível
     const fundo = scene.add.graphics();
-    fundo.fillStyle(COR_PISTA, 0.55);
+    fundo.fillStyle(COR_PISTA, 0.90);
     for (let i = 0; i < lut.length; i++) {
         const a = lut[i], b = lut[(i + 1) % lut.length];
         fundo.fillPoints([
