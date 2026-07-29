@@ -24,15 +24,15 @@ const COR_PISTA = 0x808080;        // tom parecido com o chão da foto de fundo,
 // não duplicar essa lista em dois lugares diferentes
 const PISTAS_DISPONIVEIS = {
     garagem: {
-        nome: '🏠 GARAGEM', arquivo: 'assets/images/garage_bg.jpg',
+        nome: '🏠 GARAGEM', arquivo: 'assets/images/garage_bg.png',
         descricao: 'Curvas de verdade no chão da garagem de casa'
     },
     praia: {
-        nome: '🏖️ PRAIA', arquivo: 'assets/images/praia_bg.jpg',
+        nome: '🏖️ PRAIA', arquivo: 'assets/images/praia_bg.png',
         descricao: 'Volta serpenteando na areia, cheia de curva'
     },
     calcada: {
-        nome: '🚧 CALÇADA', arquivo: 'assets/images/calcada_bg.jpg',
+        nome: '🚧 CALÇADA', arquivo: 'assets/images/calcada_bg.png',
         descricao: 'Ziguezague apertado no ladrilho da calçada'
     }
 };

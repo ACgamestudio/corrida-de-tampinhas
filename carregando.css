@@ -1,0 +1,66 @@
+/* ---------- Overlay de carregamento (some sozinho quando a cena está pronta) ---------- */
+#carregando {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    background: radial-gradient(circle at 50% 45%, #4a2c16 0%, #241207 100%);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .18s ease;
+    pointer-events: none;
+}
+
+#carregando.ativo {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: all;
+}
+
+/* tampinha girando — rotate puro roda no compositor, então continua animando mesmo
+   se a thread principal travar decodificando a textura da pista */
+#carregando-tampinha {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background:
+        repeating-conic-gradient(#e74c3c 0deg 15deg, #c0392b 15deg 30deg);
+    box-shadow: inset 0 0 0 6px #fff5e0, 0 6px 14px rgba(0, 0, 0, .45);
+    animation: girarTampinha 1s linear infinite;
+    will-change: transform;
+}
+
+@keyframes girarTampinha {
+    to { transform: rotate(360deg); }
+}
+
+#carregando-texto {
+    font-family: 'Fredoka', Arial, sans-serif;
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: .5px;
+    color: #ffd76b;
+    text-shadow: 0 2px 0 #3e2412;
+}
+
+#carregando-trilho {
+    width: min(260px, 60vw);
+    height: 10px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, .45);
+    box-shadow: inset 0 0 0 2px rgba(240, 217, 168, .35);
+    overflow: hidden;
+}
+
+#carregando-barra {
+    height: 100%;
+    background: linear-gradient(90deg, #ffd76b, #f0a534);
+    transform: scaleX(.02);
+    transform-origin: left center;
+    transition: transform .14s linear;
+    will-change: transform;
+}
