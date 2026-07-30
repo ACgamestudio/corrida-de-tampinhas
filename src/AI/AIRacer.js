@@ -1,17 +1,4 @@
-/* AIRacer: decisões de peteleco pros adversários.
-   API: AIRacer.decideMove(ia, pista, nivel, outros) -> { dirX, dirY, força }
 
-   Ideia central: em vez de "sempre indo pra baixo" ou só seguindo a tangente do ponto atual,
-   a IA mira num ponto um pouco à frente NA LINHA CENTRAL da pista (técnica de "perseguição",
-   comum em IA de corrida). Isso sozinho já resolve a maior parte do trabalho: como a pista
-   curva, o ponto-alvo também curva, então o peteleco naturalmente acompanha a curva; e se a
-   tampinha estiver fora do centro da faixa, mirar no centro à frente já puxa ela de volta.
-
-   Além disso, a cada turno a IA primeiro avalia se vale a pena ATACAR um adversário ao alcance
-   (empurrar pra fora da pista, bloquear ultrapassagem, desestabilizar com uma batida de lado) —
-   só cai pra corrida "limpa" (seguir a linha, tentar ultrapassar) quando não há alvo que valha
-   a pena. Isso é o que faz a IA parecer competitiva e agressiva, não só um piloto-fantasma.
-*/
 
 const AIRacer = {
     NIVEIS: {
