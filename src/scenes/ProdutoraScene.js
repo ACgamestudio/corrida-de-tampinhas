@@ -13,6 +13,7 @@ class ProdutoraScene extends Phaser.Scene {
     }
 
     preload() {
+        Carregando.acompanhar(this, 'Carregando...');
         this.load.video('videoProdutora', 'assets/video/produtora.mp4');
     }
 

@@ -12,6 +12,7 @@ class IntroScene extends Phaser.Scene {
     }
 
     preload() {
+        Carregando.acompanhar(this, 'Carregando...');
         this.load.audio('musica_menu', 'assets/audio/musica_menu.mp3');
         this.load.video('videoIntro', 'assets/video/intro.mp4');
     }

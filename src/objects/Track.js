@@ -24,16 +24,19 @@ const COR_PISTA = 0x808080;        // tom parecido com o chão da foto de fundo,
 // não duplicar essa lista em dois lugares diferentes
 const PISTAS_DISPONIVEIS = {
     garagem: {
-        nome: '🏠 GARAGEM', arquivo: 'assets/images/garage_bg.png',
-        descricao: 'Curvas de verdade no chão da garagem de casa'
+        nome: '🏠 GARAGEM', arquivo: 'assets/images/garage_bg.webp', arquivoPreview: 'assets/images/garage_bg_preview.webp',
+        descricao: 'Curvas de verdade no chão da garagem de casa',
+        musica: { chave: 'musica_garagem', arquivo: 'assets/audio/musica_garagem.mp3' }
     },
     praia: {
-        nome: '🏖️ PRAIA', arquivo: 'assets/images/praia_bg.png',
-        descricao: 'Volta serpenteando na areia, cheia de curva'
+        nome: '🏖️ PRAIA', arquivo: 'assets/images/praia_bg.webp', arquivoPreview: 'assets/images/praia_bg_preview.webp',
+        descricao: 'Volta serpenteando na areia, cheia de curva',
+        musica: { chave: 'musica_praia', arquivo: 'assets/audio/musica_praia.mp3' }
     },
     calcada: {
-        nome: '🚧 CALÇADA', arquivo: 'assets/images/calcada_bg.png',
-        descricao: 'Ziguezague apertado no ladrilho da calçada'
+        nome: '🚧 CALÇADA', arquivo: 'assets/images/calcada_bg.webp', arquivoPreview: 'assets/images/calcada_bg_preview.webp',
+        descricao: 'Ziguezague apertado no ladrilho da calçada',
+        musica: { chave: 'musica_calcada', arquivo: 'assets/audio/musica_calcada.mp3' }
     }
 };
 

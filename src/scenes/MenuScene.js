@@ -12,8 +12,9 @@ class MenuScene extends Phaser.Scene {
     }
 
     preload() {
+        Carregando.acompanhar(this, 'Carregando...');
         this.load.audio('musica_menu', 'assets/audio/musica_menu.mp3');
-        this.load.image('fundoMenu', 'assets/images/menu_bg.png');
+        this.load.image('fundoMenu', 'assets/images/menu_bg.webp');
     }
 
     create() {

@@ -5,15 +5,17 @@ class GameScene extends Phaser.Scene {
     }
 
     preload() {
+        Carregando.acompanhar(this, 'Preparando a pista...');
         const infoPista = PISTAS_DISPONIVEIS[JogoState.pistaEscolhida] || PISTAS_DISPONIVEIS.garagem;
         this.load.image('fundoPista', infoPista.arquivo);
-        this.load.spritesheet('mao_peteleco_anim', 'assets/images/mao_peteleco_anim.png', { frameWidth: 150, frameHeight: 245 });
-        this.load.audio('musica_garagem', 'assets/audio/musica_garagem.mp3');
+        this.load.spritesheet('mao_peteleco_anim', 'assets/images/mao_peteleco_anim.webp', { frameWidth: 150, frameHeight: 245 });
+        this.load.audio(infoPista.musica.chave, infoPista.musica.arquivo);
     }
 
     create() {
         criarBotaoTelaCheia(this);
-        tocarMusicaDeFundo(this, 'musica_garagem', 0.32);
+        const infoPista = PISTAS_DISPONIVEIS[JogoState.pistaEscolhida] || PISTAS_DISPONIVEIS.garagem;
+        tocarMusicaDeFundo(this, infoPista.musica.chave, 0.32);
         this.tampinhas = [];
         this.isDragging = false;
         this.dragStart = null;

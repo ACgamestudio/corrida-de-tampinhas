@@ -10,10 +10,12 @@ class SelecaoPistaScene extends Phaser.Scene {
     }
 
     preload() {
-        // as 3 fotos de pista já ficam prontas aqui — são só 3 arquivos pequenos de preview,
-        // vale a pena carregar todas de uma vez pra trocar de seleção sem esperar
+        Carregando.acompanhar(this, 'Carregando...');
+        // agora sim são 3 arquivos pequenos de preview (~30KB cada) — antes essa linha
+        // carregava o arquivo grande usado na corrida (vários MB cada), o que travava
+        // bastante essa troca de tela à toa, já que aqui só precisamos de uma miniatura
         Object.entries(PISTAS_DISPONIVEIS).forEach(([chave, info]) => {
-            this.load.image('previewPista_' + chave, info.arquivo);
+            this.load.image('previewPista_' + chave, info.arquivoPreview);
         });
         this.load.audio('musica_menu', 'assets/audio/musica_menu.mp3');
     }
