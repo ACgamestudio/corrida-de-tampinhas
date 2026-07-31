@@ -9,10 +9,16 @@ const Carregando = {
     texto: null,
     timerMostrar: null,
     timerSeguranca: null,
+    timerEsconderAdiado: null,
     visivel: false,
+    inicioCarregamento: 0,   // performance.now() de quando o loader começou (START)
+    mostradoEm: 0,           // performance.now() de quando a classe .ativo foi realmente aplicada
 
-    ATRASO_MS: 180,      // só aparece se o carregamento passar disso (evita flash em cache)
-    LIMITE_MS: 20000,    // trava de segurança: nunca deixa o overlay preso na tela
+    ATRASO_MS: 180,           // só aparece se o carregamento passar disso (evita flash em cache)
+    TEMPO_MINIMO_VISIVEL_MS: 400, // uma vez visível, fica pelo menos esse tanto — evita ela
+                                   // "piscar" sem pintar nenhum frame quando o create() da cena
+                                   // trava a thread principal logo depois de um download rápido
+    LIMITE_MS: 20000,        // trava de segurança: nunca deixa o overlay preso na tela
 
     init() {
         if (this.el !== null) return;
@@ -32,6 +38,7 @@ const Carregando = {
         loader.on(Phaser.Loader.Events.START, () => {
             this.definirProgresso(0);
             if (rotulo && this.texto) this.texto.textContent = rotulo;
+            this.inicioCarregamento = performance.now();
             clearTimeout(this.timerMostrar);
             this.timerMostrar = setTimeout(() => this.mostrar(), this.ATRASO_MS);
             clearTimeout(this.timerSeguranca);
@@ -62,12 +69,38 @@ const Carregando = {
     mostrar() {
         if (!this.el || this.visivel) return;
         this.visivel = true;
+        this.mostradoEm = performance.now();
         this.el.classList.add('ativo');
     },
 
     esconder() {
         clearTimeout(this.timerMostrar);
         clearTimeout(this.timerSeguranca);
+        clearTimeout(this.timerEsconderAdiado);
+
+        // se o carregamento já demorou mais que o atraso mas a barra ainda não tinha sido
+        // mostrada (create() travou a thread e comeu o timer do "mostrar"), força mostrar
+        // agora mesmo — do contrário ela nunca aparece nesse tipo de carregamento
+        if (!this.visivel && performance.now() - this.inicioCarregamento >= this.ATRASO_MS) {
+            this.mostrar();
+        }
+
+        if (!this.el || !this.visivel) return;
+
+        const decorrido = performance.now() - this.mostradoEm;
+        if (decorrido < this.TEMPO_MINIMO_VISIVEL_MS) {
+            // já apareceu, mas faz pouco tempo — segura na tela até completar o mínimo,
+            // senão ela pode sumir no mesmo frame em que apareceu e ninguém vê nada
+            this.timerEsconderAdiado = setTimeout(
+                () => this.esconderAgora(),
+                this.TEMPO_MINIMO_VISIVEL_MS - decorrido
+            );
+            return;
+        }
+        this.esconderAgora();
+    },
+
+    esconderAgora() {
         if (!this.el || !this.visivel) return;
         this.visivel = false;
         this.el.classList.remove('ativo');

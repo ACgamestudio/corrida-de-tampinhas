@@ -42,9 +42,9 @@ class GameScene extends Phaser.Scene {
         this.physics.world.setBounds(0, 0, MUNDO_LARGURA, MUNDO_ALTURA);
         this.cameras.main.setBounds(0, 0, MUNDO_LARGURA, MUNDO_ALTURA);
 
-        // a foto tem só 1408x768 — qualquer ampliação borra ela. Mosaico em escala 1:1
-        // (tamanho real, sem ampliar nada) pra manter nítida; ela só se repete mais vezes
-        // pelo mundo (a maior parte da área de jogo já é coberta pela cor sólida da pista).
+        // mosaico em escala 1:1 (tamanho real, sem ampliar nada) pra manter nítida — a foto
+        // de fundo precisa ser maior que o mundo (3000x2000) nas duas dimensões, senão o
+        // mosaico repete um pedaço de uma segunda cópia da foto pra preencher a sobra.
         this.add.tileSprite(0, 0, MUNDO_LARGURA, MUNDO_ALTURA, 'fundoPista')
             .setOrigin(0, 0)
             .setTileScale(1, 1);
