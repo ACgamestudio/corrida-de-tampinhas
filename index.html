@@ -13,6 +13,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
 
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 </head>
 
 <body>
@@ -28,11 +32,15 @@
     </div>
 
     <script src="src/ui/Carregando.js"></script>
+    <script src="src/multiplayer/firebase-init.js"></script>
+    <script src="src/multiplayer/Multiplayer.js"></script>
     <script src="src/scenes/ProdutoraScene.js"></script>
     <script src="src/scenes/MenuScene.js"></script>
     <script src="src/scenes/IntroScene.js"></script>
     <script src="src/scenes/SelecaoScene.js"></script>
     <script src="src/scenes/SelecaoPistaScene.js"></script>
+    <script src="src/scenes/LobbyOnlineScene.js"></script>
+    <script src="src/scenes/AguardandoAnfitriaoScene.js"></script>
     <script src="src/objects/Track.js"></script>
     <script src="src/objects/Cap.js"></script>
     <script src="src/Physics/CapPhysics.js"></script>

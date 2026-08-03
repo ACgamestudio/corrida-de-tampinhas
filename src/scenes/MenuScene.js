@@ -67,6 +67,27 @@ class MenuScene extends Phaser.Scene {
         // botão — placa de madeira, não retângulo de menu
         this.criarBotaoComecar(480, 387);
 
+        // link discreto pro multiplayer online (2 jogadores + 2 IA), abaixo do botão principal
+        const botaoOnline = this.add.text(480, 440, '🌐 Jogar Online', {
+            fontSize: '17px',
+            fontFamily: FONTE_TITULO,
+            fontStyle: '600',
+            color: '#cfe8ff',
+            stroke: '#000000',
+            strokeThickness: 4,
+            backgroundColor: '#00000055',
+            padding: { x: 12, y: 6 }
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        botaoOnline.on('pointerover', () => botaoOnline.setStyle({ color: '#ffffff' }));
+        botaoOnline.on('pointerout', () => botaoOnline.setStyle({ color: '#cfe8ff' }));
+        botaoOnline.on('pointerdown', () => {
+            if (this.transicaoEmAndamento) return;
+            SomFX.peteleco();
+            this.cameras.main.fadeOut(250, 0, 0, 0);
+            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('LobbyOnlineScene'));
+        });
+
         // pontuação total acumulada (vitórias + batidas, ver GameScene) — persiste entre
         // sessões via localStorage, então aparece aqui mesmo antes de correr de novo
         this.add.text(926, 24, '⭐ ' + formatarPontuacao() + ' pts', {

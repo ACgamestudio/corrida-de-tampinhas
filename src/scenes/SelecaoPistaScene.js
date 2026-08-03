@@ -56,6 +56,13 @@ class SelecaoPistaScene extends Phaser.Scene {
             strokeThickness: 3
         }).setOrigin(0.5);
 
+        this.textoStatusOnline = this.add.text(480, 90, '', {
+            fontSize: '13px',
+            fontFamily: 'Arial',
+            fontStyle: 'italic',
+            color: '#cfe8ff'
+        }).setOrigin(0.5);
+
         // ---------- 3 cartas lado a lado, uma por pista ----------
         const chaves = Object.keys(PISTAS_DISPONIVEIS);
         const cyFrame = 210;
@@ -162,7 +169,61 @@ class SelecaoPistaScene extends Phaser.Scene {
 
         criarBotaoEstilizado(this, 780, 500, 200, 52, '✅ COMEÇAR', 0x2ecc71, 0x1e8449, '#052e13', () => {
             JogoState.pistaEscolhida = pistaSelecionada;
+
+            if (JogoState.online && JogoState.souAnfitriao) {
+                this.iniciarCorridaOnlineComoAnfitriao();
+                return;
+            }
+
             this.scene.start('CorridaScene');
         });
+    }
+
+    // anfitrião: espera o visitante ter escolhido a tampinha dele (se ainda não escolheu),
+    // sorteia as duas IAs e quem começa, grava tudo na sala e só então inicia a corrida —
+    // dos dois lados ao mesmo tempo, já que o visitante está escutando esse mesmo documento
+    async iniciarCorridaOnlineComoAnfitriao() {
+        this.textoStatusOnline.setText('Aguardando o outro jogador escolher a tampinha dele...');
+
+        let visitanteMarca = null;
+        try {
+            const doc = await Multiplayer.refSala(JogoState.salaCodigo).get();
+            visitanteMarca = doc.exists ? doc.data().visitanteMarca : null;
+
+            if (!visitanteMarca) {
+                visitanteMarca = await new Promise(resolve => {
+                    const pararEscuta = Multiplayer.ouvirSala(JogoState.salaCodigo, dados => {
+                        if (dados.visitanteMarca) {
+                            pararEscuta();
+                            resolve(dados.visitanteMarca);
+                        }
+                    });
+                });
+            }
+
+            this.textoStatusOnline.setText('Preparando a corrida...');
+
+            const marcaAnfitriao = JogoState.marcaJogador;
+            const restantes = Phaser.Utils.Array.Shuffle(
+                MARCAS_DISPONIVEIS.filter(m => m.nome !== marcaAnfitriao && m.nome !== visitanteMarca)
+            ).slice(0, 2).map(m => m.nome);
+
+            const marcas = [marcaAnfitriao, visitanteMarca, ...restantes];
+            const niveisIA = Phaser.Utils.Array.Shuffle(['Fácil', 'Médio', 'Difícil']).slice(0, 2);
+            const turnoInicial = Phaser.Math.Between(0, 3);
+
+            await Multiplayer.definirSetupCorrida(JogoState.salaCodigo, {
+                pista: JogoState.pistaEscolhida, marcas, niveisIA, turnoInicial
+            });
+
+            JogoState.marcasCorridaOnline = marcas;
+            JogoState.niveisIAOnline = niveisIA;
+            JogoState.turnoInicialOnline = turnoInicial;
+
+            this.scene.start('CorridaScene');
+        } catch (erro) {
+            console.error('[SelecaoPistaScene] falha ao preparar corrida online:', erro);
+            this.textoStatusOnline.setText('Deu erro preparando a corrida. Confere sua internet e tenta de novo.');
+        }
     }
 }

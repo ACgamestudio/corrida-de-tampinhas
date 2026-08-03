@@ -183,6 +183,18 @@ class SelecaoScene extends Phaser.Scene {
         criarBotaoEstilizado(this, 780, 500, 200, 52, '✅ CONFIRMAR', 0x2ecc71, 0x1e8449, '#052e13', () => {
             JogoState.corJogador = marcaSelecionada.cor;
             JogoState.marcaJogador = marcaSelecionada.nome;
+
+            if (JogoState.online && !JogoState.souAnfitriao) {
+                // visitante: só grava a escolha na sala e espera o anfitrião fechar a corrida
+                Multiplayer.definirMarcaVisitante(JogoState.salaCodigo, marcaSelecionada.nome)
+                    .then(() => this.scene.start('AguardandoAnfitriaoScene'))
+                    .catch(erro => {
+                        console.error('[SelecaoScene] falha ao gravar marca do visitante:', erro);
+                        this.scene.start('AguardandoAnfitriaoScene'); // segue mesmo assim; a sala ainda tem o registro de entrada
+                    });
+                return;
+            }
+
             this.scene.start('SelecaoPistaScene');
         });
     }

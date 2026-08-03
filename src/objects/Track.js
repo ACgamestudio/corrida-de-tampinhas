@@ -210,11 +210,13 @@ function construirPista(presetKey = 'garagem') {
     return pista;
 }
 
-// mantém um ângulo dentro de [-π, π]
+// mantém um ângulo dentro de [-π, π] — usa módulo em vez de um while, que poderia girar
+// pra sempre (travando a thread de vez, sem nem lançar erro) se algum cálculo em algum
+// lugar do jogo produzisse Infinity por engano
 function normalizarAngulo(a) {
-    while (a > Math.PI) a -= Math.PI * 2;
-    while (a < -Math.PI) a += Math.PI * 2;
-    return a;
+    if (!Number.isFinite(a)) return 0;
+    const DOIS_PI = Math.PI * 2;
+    return ((a + Math.PI) % DOIS_PI + DOIS_PI) % DOIS_PI - Math.PI;
 }
 
 // menor distância entre duas posições "s" ao longo da pista, considerando o laço fechado

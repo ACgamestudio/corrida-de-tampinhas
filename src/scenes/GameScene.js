@@ -25,6 +25,11 @@ class GameScene extends Phaser.Scene {
         this.pista = construirPista(JogoState.pistaEscolhida || 'garagem');
         CapPhysics.init(this);
 
+        // ---------- multiplayer online: quem sou eu na lista de tampinhas, e quem controla o quê ----------
+        this.online = JogoState.online === true;
+        this.souAnfitriao = JogoState.souAnfitriao === true;
+        this.meuIndice = this.online ? (JogoState.meuIndice || 0) : 0;
+
         // manchas de óleo na pista: ali o atrito quase some e a tampinha escorrega bem mais
         // longe (e um pouco pro lado, de forma imprevisível) — duas manchas em pontos
         // diferentes da volta, localizadas por posição ao longo do traçado (s)
@@ -64,10 +69,18 @@ class GameScene extends Phaser.Scene {
 
         const marcasParaIA = Phaser.Utils.Array.Shuffle(MARCAS_DISPONIVEIS.filter(m => m.nome !== JogoState.marcaJogador)).slice(0, 3);
         const marcaJogador = MARCAS_DISPONIVEIS.find(m => m.nome === JogoState.marcaJogador) || MARCAS_DISPONIVEIS[0];
-        const MARCAS_CORRIDA = [marcaJogador, ...marcasParaIA];
+
+        // offline: sorteia os 3 adversários. Online: usa exatamente as 4 marcas que o
+        // anfitrião definiu e sincronizou via Firestore (índice 0 = anfitrião, 1 = visitante,
+        // 2 e 3 = IA) — assim as duas telas mostram a mesma corrida, com as mesmas tampinhas.
+        const MARCAS_CORRIDA = this.online && JogoState.marcasCorridaOnline
+            ? JogoState.marcasCorridaOnline.map(nome => MARCAS_DISPONIVEIS.find(m => m.nome === nome) || marcaJogador)
+            : [marcaJogador, ...marcasParaIA];
 
         // adversários com níveis diferentes de habilidade — não são todos iguais
-        const NIVEIS_IA = ['Fácil', 'Médio', 'Difícil'];
+        const NIVEIS_IA = this.online && JogoState.niveisIAOnline
+            ? JogoState.niveisIAOnline
+            : ['Fácil', 'Médio', 'Difícil'];
 
         for (let i = 0; i < MARCAS_CORRIDA.length; i++) {
             const t = criarTampinha(this, MARCAS_CORRIDA[i], posicoesLargada[i], this.pista);
@@ -75,7 +88,7 @@ class GameScene extends Phaser.Scene {
             this.tampinhas.push(t);
         }
 
-        this.jogador = this.tampinhas[0];
+        this.jogador = this.tampinhas[this.meuIndice];
 
         this.jogador.setInteractive(
             new Phaser.Geom.Circle(38, 38, 33),
@@ -100,6 +113,7 @@ class GameScene extends Phaser.Scene {
         });
 
         this.physics.add.collider(grupoTampinhas, grupoTampinhas, (a, b) => {
+          try {
             const impacto = CollisionManager.resolveCapCollision(a, b);
             SomFX.colisao((a.pitchSom + b.pitchSom) / 2);
 
@@ -127,6 +141,12 @@ class GameScene extends Phaser.Scene {
                     this.mostrarFlutuantePontos((a.x + b.x) / 2, (a.y + b.y) / 2 - 30, '+0,2');
                 }
             }
+          } catch (erro) {
+              // mesmo motivo dos outros try/catch nesta cena: sem isso, um erro aqui derruba
+              // o loop do Phaser inteiro (jogo trava de vez, até o botão de Menu para de
+              // responder, mesmo com a música ainda tocando por trás).
+              console.error('[Corrida de Tampinhas] Erro numa colisão entre tampinhas:', erro);
+          }
         });
         // sem collider contra a pista: a borda é "mole" (ver CollisionManager.aplicarBordaPista,
         // chamado a cada frame no update()) — não uma parede rígida do Arcade.
@@ -140,22 +160,29 @@ class GameScene extends Phaser.Scene {
         this.criarMinimapa();
 
         // ---------- sistema de turnos: um peteleco por vez, revezando entre os 4 ----------
-        this.turnoAtual = Phaser.Math.Between(0, this.tampinhas.length - 1);
+        this.turnoAtual = (this.online && JogoState.turnoInicialOnline !== null && JogoState.turnoInicialOnline !== undefined)
+            ? JogoState.turnoInicialOnline
+            : Phaser.Math.Between(0, this.tampinhas.length - 1);
         this.aguardandoParada = false;
 
         const podeJogadorJogar = () =>
-            this.turnoAtual === 0 && !this.aguardandoParada && this.corridaLiberada && !this.vencedor && !this.pausadoPorMenu;
+            this.turnoAtual === this.meuIndice && !this.aguardandoParada && this.corridaLiberada && !this.vencedor && !this.pausadoPorMenu;
 
         this.input.on('dragstart', (pointer, gameObject) => {
-            if (!podeJogadorJogar()) return;
-            this.isDragging = true;
-            this.dragStart = { x: gameObject.x, y: gameObject.y };
-            this.maoPeteleco.setFrame(0);
-            this.maoPeteleco.setVisible(true);
-            this.setaDirecao.setVisible(true);
+            try {
+                if (!podeJogadorJogar()) return;
+                this.isDragging = true;
+                this.dragStart = { x: gameObject.x, y: gameObject.y };
+                this.maoPeteleco.setFrame(0);
+                this.maoPeteleco.setVisible(true);
+                this.setaDirecao.setVisible(true);
+            } catch (erro) {
+                console.error('[Corrida de Tampinhas] Erro no início do arrasto:', erro);
+            }
         });
 
         this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
+          try {
             if (!podeJogadorJogar()) return;
             const dx = dragX - this.dragStart.x;
             const dy = dragY - this.dragStart.y;
@@ -196,9 +223,13 @@ class GameScene extends Phaser.Scene {
             this.setaDirecao.setRotation(anguloDisparo);
             this.setaDirecao.setScale(0.7 + forcaRel * 1.2, 0.85 + forcaRel * 0.5);
             this.setaDirecao.setTint(corHex);
+          } catch (erro) {
+              console.error('[Corrida de Tampinhas] Erro durante o arrasto:', erro);
+          }
         });
 
         this.input.on('dragend', (pointer, gameObject) => {
+          try {
             if (!podeJogadorJogar()) return;
             this.isDragging = false;
             this.setaDirecao.setVisible(false);
@@ -223,6 +254,14 @@ class GameScene extends Phaser.Scene {
             );
             CapPhysics.onImpulse(gameObject, forca);
 
+            if (this.online) {
+                Multiplayer.enviarJogada(JogoState.salaCodigo, {
+                    indice: this.meuIndice,
+                    velX: gameObject.body.velocity.x,
+                    velY: gameObject.body.velocity.y
+                }).catch(erro => console.error('[Multiplayer] falha ao enviar jogada:', erro));
+            }
+
             // poeira: só quando o peteleco sai forte de verdade — um tapa fraquinho não levanta pó
             if (forca > this.FORCA_MAXIMA * 0.55) {
                 this.criarPoeira(this.dragStart.x, this.dragStart.y, angulo + Math.PI);
@@ -241,6 +280,11 @@ class GameScene extends Phaser.Scene {
             });
 
             this.aguardandoParada = true;
+          } catch (erro) {
+              console.error('[Corrida de Tampinhas] Erro ao soltar o peteleco:', erro);
+              this.isDragging = false;
+              this.aguardandoParada = true; // não deixa o turno preso pra sempre se algo falhar aqui
+          }
         });
 
         // mão que "segura" a tampinha durante o arrasto + seta indicando a direção do disparo,
@@ -298,6 +342,7 @@ class GameScene extends Phaser.Scene {
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setInteractive({ useHandCursor: true }).setVisible(false);
 
         this.botaoReiniciar.on('pointerdown', () => {
+            if (this.online) return; // numa corrida online, "reiniciar" sozinho quebraria a sincronia com o outro jogador
             this.scene.restart();
         });
 
@@ -310,6 +355,7 @@ class GameScene extends Phaser.Scene {
         }).setOrigin(0.5).setScrollFactor(0).setDepth(1000).setInteractive({ useHandCursor: true }).setVisible(false);
 
         this.botaoMenu.on('pointerdown', () => {
+            this.sairDoModoOnline();
             this.scene.start('MenuScene');
         });
 
@@ -342,6 +388,15 @@ class GameScene extends Phaser.Scene {
         }).setOrigin(0, 0).setScrollFactor(0).setDepth(1000);
 
         this.ultimoPontoColisaoEm = 0;
+
+        if (this.online) {
+            this.escutarRede();
+        }
+
+        this.events.once('shutdown', () => {
+            if (this.pararEscutaJogadas) this.pararEscutaJogadas();
+            if (this.pararEscutaCorrecao) this.pararEscutaCorrecao();
+        });
 
         this.iniciarContagem();
     }
@@ -474,6 +529,7 @@ class GameScene extends Phaser.Scene {
         };
 
         const botaoSim = criarBotaoEstilizado(this, 400, 320, 150, 46, 'Sair', 0xc0392b, 0x7b241c, '#ffffff', () => {
+            this.sairDoModoOnline();
             this.scene.start('MenuScene');
         });
         botaoSim.setScrollFactor(0).setDepth(2001);
@@ -550,13 +606,22 @@ class GameScene extends Phaser.Scene {
     }
 
     atualizarInteratividadeJogador() {
-        const podeJogar = this.turnoAtual === 0 && this.corridaLiberada && !this.vencedor;
+        const podeJogar = this.turnoAtual === this.meuIndice && this.corridaLiberada && !this.vencedor;
         if (podeJogar) {
             this.jogador.setInteractive(); // reaproveita a hit area circular já configurada
             this.input.setDraggable(this.jogador);
         } else {
             this.jogador.disableInteractive();
         }
+    }
+
+    // decide se ESTE cliente é quem deve calcular e jogar a IA daquele índice.
+    // offline: qualquer tampinha que não seja a minha. online: só o anfitrião, e só pras
+    // duas tampinhas que são IA de verdade (a do outro jogador espera chegar pela rede).
+    ehTurnoDeIALocal(indice) {
+        if (indice === this.meuIndice) return false;
+        if (!this.online) return true;
+        return this.souAnfitriao && indice !== 0 && indice !== 1;
     }
 
     // move a câmera na hora pro competidor da vez, depois acompanha suavemente enquanto ele desliza
@@ -593,7 +658,7 @@ class GameScene extends Phaser.Scene {
                     this.atualizarInteratividadeJogador();
                     this.focarCameraNoTurno();
 
-                    if (this.turnoAtual !== 0) {
+                    if (this.ehTurnoDeIALocal(this.turnoAtual)) {
                         this.time.delayedCall(this.atrasoIA(this.tampinhas[this.turnoAtual]), () => this.iaFazerJogada());
                     }
                 }
@@ -615,7 +680,7 @@ class GameScene extends Phaser.Scene {
     atualizarTextoTurno() {
         if (this.vencedor) { this.textoTurno.setVisible(false); return; }
         const nomeAtual = this.tampinhas[this.turnoAtual].nome;
-        this.textoTurno.setText(this.turnoAtual === 0 ? 'Sua vez!' : ` Vez de ${nomeAtual}...`);
+        this.textoTurno.setText(this.turnoAtual === this.meuIndice ? 'Sua vez!' : ` Vez de ${nomeAtual}...`);
         this.textoTurno.setVisible(true);
     }
 
@@ -640,6 +705,14 @@ class GameScene extends Phaser.Scene {
             }
 
             SomFX.peteleco(ia.pitchSom);
+
+            if (this.online) {
+                Multiplayer.enviarJogada(JogoState.salaCodigo, {
+                    indice: this.turnoAtual,
+                    velX: ia.body.velocity.x,
+                    velY: ia.body.velocity.y
+                }).catch(erro => console.error('[Multiplayer] falha ao enviar jogada da IA:', erro));
+            }
         } catch (erro) {
             // se a decisão da IA falhar por qualquer motivo, dá um impulso mínimo genérico
             // em vez de travar o turno pra sempre esperando uma jogada que nunca vai vir
@@ -668,8 +741,72 @@ class GameScene extends Phaser.Scene {
         this.atualizarInteratividadeJogador();
         this.focarCameraNoTurno();
 
-        if (this.turnoAtual !== 0) {
+        // o anfitrião é quem manda a "verdade" da posição de cada tampinha ao final de cada
+        // turno — corrige qualquer deriva que a física dos dois lados possa ter acumulado
+        // durante o turno (frames em momentos ligeiramente diferentes em cada máquina)
+        if (this.online && this.souAnfitriao) {
+            Multiplayer.enviarCorrecao(JogoState.salaCodigo, {
+                tampinhas: this.tampinhas.map(t => ({
+                    x: t.x, y: t.y,
+                    progressoAcumulado: t.progressoAcumulado,
+                    sAnterior: t.sAnterior
+                }))
+            }).catch(erro => console.error('[Multiplayer] falha ao enviar correção:', erro));
+        }
+
+        if (this.ehTurnoDeIALocal(this.turnoAtual)) {
             this.time.delayedCall(this.atrasoIA(this.tampinhas[this.turnoAtual]), () => this.iaFazerJogada());
+        }
+    }
+
+    // ---------- rede: aplica jogadas e correções vindas do outro jogador/anfitrião ----------
+    sairDoModoOnline() {
+        if (!this.online) return;
+        if (this.souAnfitriao && JogoState.salaCodigo) Multiplayer.encerrarSala(JogoState.salaCodigo);
+        JogoState.online = false;
+        JogoState.salaCodigo = null;
+    }
+
+    escutarRede() {
+        this.pararEscutaJogadas = Multiplayer.ouvirJogadas(JogoState.salaCodigo, jogada => {
+            if (jogada.indice === this.meuIndice) return; // já apliquei a minha localmente
+            this.aplicarJogadaRecebida(jogada.indice, jogada.velX, jogada.velY);
+        });
+
+        if (!this.souAnfitriao) {
+            this.pararEscutaCorrecao = Multiplayer.ouvirCorrecao(JogoState.salaCodigo, correcao => {
+                this.aplicarCorrecao(correcao);
+            });
+        }
+    }
+
+    aplicarJogadaRecebida(indice, velX, velY) {
+        const alvo = this.tampinhas[indice];
+        if (!alvo || !alvo.body || this.vencedor) return;
+        try {
+            alvo.body.setVelocity(velX, velY);
+            CapPhysics.onImpulse(alvo, Phaser.Math.Distance.Between(0, 0, velX, velY));
+            SomFX.peteleco(alvo.pitchSom);
+            this.aguardandoParada = true;
+        } catch (erro) {
+            console.error('[Corrida de Tampinhas] Erro aplicando jogada recebida da rede:', erro);
+        }
+    }
+
+    aplicarCorrecao(correcao) {
+        if (!correcao || !correcao.tampinhas) return;
+        try {
+            correcao.tampinhas.forEach((c, i) => {
+                const t = this.tampinhas[i];
+                if (!t || !t.body) return;
+                t.x = c.x;
+                t.y = c.y;
+                t.body.setVelocity(0, 0);
+                t.progressoAcumulado = c.progressoAcumulado;
+                t.sAnterior = c.sAnterior;
+            });
+        } catch (erro) {
+            console.error('[Corrida de Tampinhas] Erro aplicando correção de rede:', erro);
         }
     }
 

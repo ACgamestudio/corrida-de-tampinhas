@@ -5,7 +5,16 @@ const JogoState = {
     pistaEscolhida: 'garagem',  // chave da pista escolhida em SelecaoPistaScene (ver PISTAS_DISPONIVEIS)
     musicaAtual: null,          // instância de som (Phaser) da trilha tocando agora
     musicaAtualChave: null,     // chave da trilha tocando agora, pra não reiniciar à toa
-    pontuacaoDecimos: 0         // pontuação do jogador em décimos (ver carregarPontuacaoSalva abaixo)
+    pontuacaoDecimos: 0,        // pontuação do jogador em décimos (ver carregarPontuacaoSalva abaixo)
+
+    // ---------- multiplayer online (ver src/multiplayer/) ----------
+    online: false,              // true durante uma partida online (2 jogadores + 2 IA)
+    souAnfitriao: false,        // true = eu criei a sala e escolho a pista; false = visitante
+    salaCodigo: null,           // código de 5 caracteres da sala atual no Firestore
+    meuIndice: 0,               // índice da MINHA tampinha em GameScene.tampinhas (0=anfitrião, 1=visitante)
+    marcasCorridaOnline: null,  // [nomeMarca x4] definido pelo anfitrião, sincronizado via Firestore
+    niveisIAOnline: null,       // [nível x2] das duas tampinhas de IA (índices 2 e 3)
+    turnoInicialOnline: null    // de quem é o primeiro turno, sorteado pelo anfitrião
 };
 JogoState.pontuacaoDecimos = carregarPontuacaoSalva();
 
@@ -659,7 +668,7 @@ const config = {
             debug: false
         }
     },
-    scene: [ProdutoraScene, IntroScene, MenuScene, SelecaoScene, SelecaoPistaScene, GameScene]
+    scene: [ProdutoraScene, IntroScene, MenuScene, SelecaoScene, SelecaoPistaScene, LobbyOnlineScene, AguardandoAnfitriaoScene, GameScene]
 };
 
 function iniciarJogo() {
