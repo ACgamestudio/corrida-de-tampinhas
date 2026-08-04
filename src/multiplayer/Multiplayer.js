@@ -84,10 +84,11 @@ const Multiplayer = {
 
     // envia uma jogada (peteleco de jogador ou de IA) como um novo documento na subcoleção,
     // com número sequencial crescente, pra manter a ordem de aplicação nos dois lados
-    async enviarJogada(codigo, { indice, velX, velY }) {
+    async enviarJogada(codigo, { indice, velX, velY, contador }) {
         const colecao = this.refSala(codigo).collection('jogadas');
         await colecao.add({
             indice, velX, velY,
+            contador: contador === undefined ? null : contador, // nº do turno global, pra não reaplicar jogada velha
             criadaEm: firebase.firestore.FieldValue.serverTimestamp()
         });
     },

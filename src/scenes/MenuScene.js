@@ -67,7 +67,9 @@ class MenuScene extends Phaser.Scene {
         // botão — placa de madeira, não retângulo de menu
         this.criarBotaoComecar(480, 387);
 
-        // link discreto pro multiplayer online (2 jogadores + 2 IA), abaixo do botão principal
+        // atalho pro modo online. A escolha de criar/entrar em sala agora fica na tela de
+        // seleção de tampinha (SelecaoScene), junto com a escolha do jogador — esse botão
+        // só leva pra lá com o modo online já marcado.
         const botaoOnline = this.add.text(480, 440, '🌐 Jogar Online', {
             fontSize: '17px',
             fontFamily: FONTE_TITULO,
@@ -85,7 +87,8 @@ class MenuScene extends Phaser.Scene {
             if (this.transicaoEmAndamento) return;
             SomFX.peteleco();
             this.cameras.main.fadeOut(250, 0, 0, 0);
-            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('LobbyOnlineScene'));
+            JogoState.abrirOnlineNaSelecao = true;
+            this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('SelecaoScene'));
         });
 
         // pontuação total acumulada (vitórias + batidas, ver GameScene) — persiste entre

@@ -41,6 +41,19 @@ class GameScene extends Phaser.Scene {
         this.FORCA_MAXIMA = 900;
         this.DISTANCIA_MAXIMA = 140;
         this.VELOCIDADE_MINIMA_PARADA = 5;
+
+        // ---------- destravamentos: nenhum turno pode ficar preso pra sempre ----------
+        // LIMITE_MOVIMENTO_MS: se as tampinhas não pararem nesse tempo (atrito quebrado,
+        // velocidade NaN, tampinha presa numa parede), força a parada e passa a vez.
+        // LIMITE_ESPERA_MS: online, se a jogada do outro jogador não chegar nesse tempo
+        // (internet caiu, aba fechada), pula a vez dele em vez de deixar o jogo morto.
+        this.LIMITE_MOVIMENTO_MS = 7000;
+        this.LIMITE_ESPERA_MS = this.souAnfitriao ? 20000 : 28000;
+        this.HIT_AREA_TAMPINHA = new Phaser.Geom.Circle(38, 38, 33);
+        this.filaJogadasRemotas = [];
+        this.contadorTurno = 0; // nº sequencial do turno, igual nos dois clientes
+        this.movimentoComecouEm = 0;
+        this.turnoComecouEm = 0;
         this.PENALIDADE_RETROCESSO_PX = 900; // sair da pista custa 900px de volta na volta
 
         // ---------- mundo grande + câmera acompanhando quem está jogando ----------
@@ -90,10 +103,7 @@ class GameScene extends Phaser.Scene {
 
         this.jogador = this.tampinhas[this.meuIndice];
 
-        this.jogador.setInteractive(
-            new Phaser.Geom.Circle(38, 38, 33),
-            Phaser.Geom.Circle.Contains
-        );
+        this.jogador.setInteractive(this.HIT_AREA_TAMPINHA, Phaser.Geom.Circle.Contains);
         this.input.setDraggable(this.jogador);
         this.atualizarInteratividadeJogador();
 
@@ -258,7 +268,8 @@ class GameScene extends Phaser.Scene {
                 Multiplayer.enviarJogada(JogoState.salaCodigo, {
                     indice: this.meuIndice,
                     velX: gameObject.body.velocity.x,
-                    velY: gameObject.body.velocity.y
+                    velY: gameObject.body.velocity.y,
+                    contador: this.contadorTurno
                 }).catch(erro => console.error('[Multiplayer] falha ao enviar jogada:', erro));
             }
 
@@ -280,10 +291,12 @@ class GameScene extends Phaser.Scene {
             });
 
             this.aguardandoParada = true;
+            this.movimentoComecouEm = this.time.now;
           } catch (erro) {
               console.error('[Corrida de Tampinhas] Erro ao soltar o peteleco:', erro);
               this.isDragging = false;
               this.aguardandoParada = true; // não deixa o turno preso pra sempre se algo falhar aqui
+              this.movimentoComecouEm = this.time.now;
           }
         });
 
@@ -388,6 +401,27 @@ class GameScene extends Phaser.Scene {
         }).setOrigin(0, 0).setScrollFactor(0).setDepth(1000);
 
         this.ultimoPontoColisaoEm = 0;
+
+        // aviso de espera (só aparece online, quando a jogada do outro demora)
+        this.textoEspera = this.add.text(480, 50, '', {
+            fontSize: '14px',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            color: '#ffd76b',
+            backgroundColor: '#000000aa',
+            padding: { x: 10, y: 5 },
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1200).setVisible(false);
+
+        // rede de segurança do arrasto: se o dedo/mouse soltar fora do canvas, ou a aba
+        // perder o foco, o Phaser não dispara 'dragend' e a tampinha fica agarrada — daí
+        // nem o botão de Menu responde mais, porque o pointer segue capturado no drag.
+        this.input.on('pointerupoutside', () => this.cancelarArrasto());
+        this.input.on('gameout', () => this.cancelarArrasto());
+        this.game.events.on('blur', this.cancelarArrasto, this);
+        this.events.once('shutdown', () => this.game.events.off('blur', this.cancelarArrasto, this));
+
+        this.turnoComecouEm = this.time.now;
 
         if (this.online) {
             this.escutarRede();
@@ -608,11 +642,32 @@ class GameScene extends Phaser.Scene {
     atualizarInteratividadeJogador() {
         const podeJogar = this.turnoAtual === this.meuIndice && this.corridaLiberada && !this.vencedor;
         if (podeJogar) {
-            this.jogador.setInteractive(); // reaproveita a hit area circular já configurada
+            // precisa repassar a forma circular: setInteractive() sem argumento troca a
+            // área por um retângulo do tamanho da textura inteira
+            this.jogador.setInteractive(this.HIT_AREA_TAMPINHA, Phaser.Geom.Circle.Contains);
             this.input.setDraggable(this.jogador);
+        } else if (this.isDragging) {
+            // desligar o input no meio de um arrasto deixa o pointer preso no estado de
+            // drag dentro do Phaser — a tampinha fica "agarrada" no dedo e nenhum outro
+            // botão (inclusive o Menu) volta a responder. Cancela o arrasto primeiro.
+            this.cancelarArrasto();
+            this.jogador.disableInteractive();
         } else {
             this.jogador.disableInteractive();
         }
+    }
+
+    // devolve a tampinha pro lugar e limpa a mira, sem depender de receber o 'dragend'
+    cancelarArrasto() {
+        if (!this.isDragging) return;
+        this.isDragging = false;
+        if (this.dragStart && this.jogador) {
+            this.jogador.x = this.dragStart.x;
+            this.jogador.y = this.dragStart.y;
+            if (this.jogador.body) this.jogador.body.setVelocity(0, 0);
+        }
+        if (this.setaDirecao) this.setaDirecao.setVisible(false);
+        if (this.maoPeteleco) this.maoPeteleco.setVisible(false).setFrame(0);
     }
 
     // decide se ESTE cliente é quem deve calcular e jogar a IA daquele índice.
@@ -653,6 +708,7 @@ class GameScene extends Phaser.Scene {
                 }
                 if (i === passos.length - 1) {
                     this.corridaLiberada = true;
+                    this.turnoComecouEm = this.time.now;
                     this.time.delayedCall(600, () => this.textoContagem.setText(''));
                     this.atualizarTextoTurno();
                     this.atualizarInteratividadeJogador();
@@ -710,7 +766,8 @@ class GameScene extends Phaser.Scene {
                 Multiplayer.enviarJogada(JogoState.salaCodigo, {
                     indice: this.turnoAtual,
                     velX: ia.body.velocity.x,
-                    velY: ia.body.velocity.y
+                    velY: ia.body.velocity.y,
+                    contador: this.contadorTurno
                 }).catch(erro => console.error('[Multiplayer] falha ao enviar jogada da IA:', erro));
             }
         } catch (erro) {
@@ -722,21 +779,83 @@ class GameScene extends Phaser.Scene {
         }
 
         this.aguardandoParada = true;
+        this.movimentoComecouEm = this.time.now;
     }
 
     // detecta quando as tampinhas pararam de se mover pra liberar o próximo turno
     verificarFimDeTurno() {
-        if (!this.aguardandoParada || this.vencedor) return;
+        if (this.vencedor) return;
+        const agora = this.time.now;
+
+        // ninguém em movimento: ou é a minha vez de jogar, ou estou esperando alguém
+        if (!this.aguardandoParada) {
+            this.verificarEsperaDeJogada(agora);
+            return;
+        }
 
         const todasPararam = this.tampinhas.every(t => {
-            const v = Phaser.Math.Distance.Between(0, 0, t.body.velocity.x, t.body.velocity.y);
-            return v < this.VELOCIDADE_MINIMA_PARADA;
+            if (!t.body) return true;
+            const vx = t.body.velocity.x, vy = t.body.velocity.y;
+            // velocidade inválida (NaN/Infinity) nunca fica menor que o limite, então o
+            // turno nunca terminava e a corrida morria ali. Zera e considera parada.
+            if (!Number.isFinite(vx) || !Number.isFinite(vy)) {
+                t.body.setVelocity(0, 0);
+                return true;
+            }
+            return Phaser.Math.Distance.Between(0, 0, vx, vy) < this.VELOCIDADE_MINIMA_PARADA;
         });
-        if (!todasPararam) return;
 
-        this.tampinhas.forEach(t => t.body.setVelocity(0, 0));
+        const passouDoTempo = agora - this.movimentoComecouEm > this.LIMITE_MOVIMENTO_MS;
+        if (!todasPararam && !passouDoTempo) return;
+        if (!todasPararam) {
+            console.warn('[Corrida de Tampinhas] tampinhas não pararam em ' +
+                this.LIMITE_MOVIMENTO_MS + 'ms — forçando fim do turno.');
+        }
+
+        this.avancarTurno();
+    }
+
+    // online: se a jogada de quem não é IA local não chegar, pula a vez em vez de travar
+    verificarEsperaDeJogada(agora) {
+        if (!this.online || !this.corridaLiberada || this.vencedor) {
+            if (this.textoEspera) this.textoEspera.setVisible(false);
+            return;
+        }
+        // é a minha vez, ou é uma IA que este cliente mesmo joga: nada a esperar
+        if (this.turnoAtual === this.meuIndice || this.ehTurnoDeIALocal(this.turnoAtual)) {
+            if (this.textoEspera) this.textoEspera.setVisible(false);
+            return;
+        }
+        if (this.filaJogadasRemotas.length) return; // já chegou, vai ser aplicada no próximo quadro
+
+        const esperando = agora - this.turnoComecouEm;
+        if (esperando < 4000) {
+            if (this.textoEspera) this.textoEspera.setVisible(false);
+            return;
+        }
+        const faltam = Math.max(0, Math.ceil((this.LIMITE_ESPERA_MS - esperando) / 1000));
+        if (this.textoEspera) {
+            this.textoEspera
+                .setText('Sem resposta de ' + this.tampinhas[this.turnoAtual].nome +
+                         '. Pulando a vez em ' + faltam + 's...')
+                .setVisible(true);
+        }
+        if (esperando > this.LIMITE_ESPERA_MS) {
+            console.warn('[Corrida de Tampinhas] jogada de ' + this.turnoAtual +
+                ' não chegou em ' + this.LIMITE_ESPERA_MS + 'ms — pulando a vez.');
+            if (this.textoEspera) this.textoEspera.setVisible(false);
+            this.avancarTurno();
+        }
+    }
+
+    avancarTurno() {
+        this.cancelarArrasto();
+        this.tampinhas.forEach(t => { if (t.body) t.body.setVelocity(0, 0); });
         this.aguardandoParada = false;
         this.turnoAtual = (this.turnoAtual + 1) % this.tampinhas.length;
+        this.contadorTurno += 1;
+        this.turnoComecouEm = this.time.now;
+        if (this.textoEspera) this.textoEspera.setVisible(false);
         this.atualizarTextoTurno();
         this.atualizarInteratividadeJogador();
         this.focarCameraNoTurno();
@@ -746,6 +865,8 @@ class GameScene extends Phaser.Scene {
         // durante o turno (frames em momentos ligeiramente diferentes em cada máquina)
         if (this.online && this.souAnfitriao) {
             Multiplayer.enviarCorrecao(JogoState.salaCodigo, {
+                turno: this.turnoAtual,
+                contador: this.contadorTurno,
                 tampinhas: this.tampinhas.map(t => ({
                     x: t.x, y: t.y,
                     progressoAcumulado: t.progressoAcumulado,
@@ -770,7 +891,12 @@ class GameScene extends Phaser.Scene {
     escutarRede() {
         this.pararEscutaJogadas = Multiplayer.ouvirJogadas(JogoState.salaCodigo, jogada => {
             if (jogada.indice === this.meuIndice) return; // já apliquei a minha localmente
-            this.aplicarJogadaRecebida(jogada.indice, jogada.velX, jogada.velY);
+            // NÃO aplica na hora. Se a jogada chegar antes deste cliente chegar no turno
+            // dela (latência), aplicar direto move a tampinha fora de hora e os dois lados
+            // passam a esperar um pelo outro — travava a corrida pra sempre. Entra na fila
+            // e só é aplicada quando o turno for realmente daquele índice.
+            this.filaJogadasRemotas.push(jogada);
+            if (this.filaJogadasRemotas.length > 12) this.filaJogadasRemotas.shift();
         });
 
         if (!this.souAnfitriao) {
@@ -788,13 +914,36 @@ class GameScene extends Phaser.Scene {
             CapPhysics.onImpulse(alvo, Phaser.Math.Distance.Between(0, 0, velX, velY));
             SomFX.peteleco(alvo.pitchSom);
             this.aguardandoParada = true;
+            this.movimentoComecouEm = this.time.now;
         } catch (erro) {
             console.error('[Corrida de Tampinhas] Erro aplicando jogada recebida da rede:', erro);
         }
     }
 
+    // aplica uma jogada da fila, se já for a vez daquele índice
+    processarFilaRemota() {
+        if (!this.online || !this.corridaLiberada || this.vencedor) return;
+        if (this.aguardandoParada || this.isDragging) return;
+        if (!this.filaJogadasRemotas.length) return;
+
+        // joga fora o que ficou para trás (turno já passou): sem isso, uma jogada atrasada
+        // era reaplicada quando aquele índice voltasse a jogar, movendo a tampinha sozinha
+        this.filaJogadasRemotas = this.filaJogadasRemotas.filter(j =>
+            typeof j.contador !== 'number' || j.contador >= this.contadorTurno);
+
+        const pos = this.filaJogadasRemotas.findIndex(j =>
+            j.indice === this.turnoAtual &&
+            (typeof j.contador !== 'number' || j.contador === this.contadorTurno));
+        if (pos < 0) return;
+        const jogada = this.filaJogadasRemotas.splice(pos, 1)[0];
+        this.aplicarJogadaRecebida(jogada.indice, jogada.velX, jogada.velY);
+    }
+
     aplicarCorrecao(correcao) {
         if (!correcao || !correcao.tampinhas) return;
+        // nunca corrigir no meio do arrasto: a tampinha teleporta, o dragStart fica velho
+        // e a conta da força sai absurda (às vezes NaN, o que travava o fim do turno)
+        this.cancelarArrasto();
         try {
             correcao.tampinhas.forEach((c, i) => {
                 const t = this.tampinhas[i];
@@ -805,6 +954,17 @@ class GameScene extends Phaser.Scene {
                 t.progressoAcumulado = c.progressoAcumulado;
                 t.sAnterior = c.sAnterior;
             });
+            // o anfitrião é a fonte da verdade também sobre DE QUEM é a vez. Sem isso, os
+            // dois lados podiam divergir de turno e cada um ficava esperando o outro jogar.
+            if (typeof correcao.contador === 'number') this.contadorTurno = correcao.contador;
+            if (typeof correcao.turno === 'number' && correcao.turno !== this.turnoAtual) {
+                this.turnoAtual = correcao.turno;
+                this.aguardandoParada = false;
+                this.turnoComecouEm = this.time.now;
+                this.atualizarTextoTurno();
+                this.atualizarInteratividadeJogador();
+                this.focarCameraNoTurno();
+            }
         } catch (erro) {
             console.error('[Corrida de Tampinhas] Erro aplicando correção de rede:', erro);
         }
@@ -848,6 +1008,7 @@ class GameScene extends Phaser.Scene {
         // atrito real de todas as tampinhas (ver CapPhysics) — chamado 1x por frame, sempre
         CapPhysics.updateAll(this, this.tampinhas);
 
+        this.processarFilaRemota();
         this.verificarFimDeTurno();
         this.verificarColetaTampinhaSecreta();
 

@@ -14,7 +14,8 @@ const JogoState = {
     meuIndice: 0,               // índice da MINHA tampinha em GameScene.tampinhas (0=anfitrião, 1=visitante)
     marcasCorridaOnline: null,  // [nomeMarca x4] definido pelo anfitrião, sincronizado via Firestore
     niveisIAOnline: null,       // [nível x2] das duas tampinhas de IA (índices 2 e 3)
-    turnoInicialOnline: null    // de quem é o primeiro turno, sorteado pelo anfitrião
+    turnoInicialOnline: null,   // de quem é o primeiro turno, sorteado pelo anfitrião
+    abrirOnlineNaSelecao: false // menu pediu pra abrir a seleção já no modo online
 };
 JogoState.pontuacaoDecimos = carregarPontuacaoSalva();
 
