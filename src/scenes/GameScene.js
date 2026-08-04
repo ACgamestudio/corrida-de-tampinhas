@@ -962,7 +962,7 @@ class GameScene extends Phaser.Scene {
         } else if (VozOnline.falando) {
             this.botaoVoz.setText('🔴  FALANDO...').setStyle({ backgroundColor: '#c0392bcc', color: '#ffffff' });
         } else {
-            this.botaoVoz.setText('🎙  Segure pra falar  ').setStyle({ backgroundColor: '#00000088', color: '#ffffff' });
+            this.botaoVoz.setText('🎙  Segure pra falar  (V)').setStyle({ backgroundColor: '#00000088', color: '#ffffff' });
         }
 
         if (this.botaoAlto) {
