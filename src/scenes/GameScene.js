@@ -425,6 +425,7 @@ class GameScene extends Phaser.Scene {
 
         if (this.online) {
             this.escutarRede();
+            this.criarHudVoz();
         }
 
         this.events.once('shutdown', () => {
@@ -736,6 +737,11 @@ class GameScene extends Phaser.Scene {
     atualizarTextoTurno() {
         if (this.vencedor) { this.textoTurno.setVisible(false); return; }
         const nomeAtual = this.tampinhas[this.turnoAtual].nome;
+        // online: avisa por som quando a vez volta pra mim (a pessoa pode estar olhando
+        // outra coisa enquanto espera o outro jogador)
+        if (this.online && this.turnoAtual === this.meuIndice && this.corridaLiberada) {
+            try { SomFX.suaVez(); } catch (e) {}
+        }
         this.textoTurno.setText(this.turnoAtual === this.meuIndice ? 'Sua vez!' : ` Vez de ${nomeAtual}...`);
         this.textoTurno.setVisible(true);
     }
@@ -880,6 +886,103 @@ class GameScene extends Phaser.Scene {
         }
     }
 
+    // ---------- voz online: push-to-talk entre os 2 jogadores ----------
+    criarHudVoz() {
+        // botão de falar: segura pra abrir o microfone, solta pra fechar
+        this.botaoVoz = this.add.text(34, 486, '🎙  Segure pra falar', {
+            fontSize: '15px',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            backgroundColor: '#00000088',
+            padding: { x: 10, y: 6 }
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(1300).setInteractive({ useHandCursor: true });
+
+        // botão de mutar o que chega do outro jogador
+        this.botaoAlto = this.add.text(34, 452, '🔊  Ouvindo', {
+            fontSize: '13px',
+            fontFamily: 'Arial',
+            color: '#cfe8ff',
+            backgroundColor: '#00000066',
+            padding: { x: 8, y: 4 }
+        }).setOrigin(0, 0).setScrollFactor(0).setDepth(1300).setInteractive({ useHandCursor: true });
+
+        this.textoVoz = this.add.text(480, 78, '', {
+            fontSize: '13px',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            color: '#9be7a0',
+            backgroundColor: '#00000088',
+            padding: { x: 8, y: 4 },
+            align: 'center'
+        }).setOrigin(0.5).setScrollFactor(0).setDepth(1300).setVisible(false);
+
+        const abrir = () => { if (VozOnline.falar(true)) this.pintarBotaoVoz(); };
+        const fechar = () => { VozOnline.falar(false); this.pintarBotaoVoz(); };
+
+        this.botaoVoz.on('pointerdown', abrir);
+        this.botaoVoz.on('pointerup', fechar);
+        this.botaoVoz.on('pointerout', fechar);
+        this.botaoAlto.on('pointerdown', () => {
+            VozOnline.alternarSaida();
+            this.pintarBotaoVoz();
+        });
+
+        // tecla V também abre o microfone enquanto estiver pressionada
+        this.teclaVoz = this.input.keyboard.addKey('V');
+        this.teclaVoz.on('down', abrir);
+        this.teclaVoz.on('up', fechar);
+
+        VozOnline.iniciar({
+            codigo: JogoState.salaCodigo,
+            souAnfitriao: this.souAnfitriao,
+            aoMudar: () => this.pintarBotaoVoz()
+        });
+
+        this.pintarBotaoVoz();
+
+        this.events.once('shutdown', () => {
+            if (this.teclaVoz) this.input.keyboard.removeKey(this.teclaVoz);
+            VozOnline.encerrar();
+        });
+    }
+
+    pintarBotaoVoz() {
+        // .scene fica nulo depois que o objeto é destruído junto com a cena
+        if (!this.botaoVoz || !this.botaoVoz.scene) return;
+        const est = VozOnline.estado;
+
+        if (est === 'indisponivel') {
+            this.botaoVoz.setText('🎙  Voz indisponível').setStyle({ backgroundColor: '#00000066', color: '#c9b6b6' });
+            this.botaoVoz.disableInteractive();
+        } else if (est === 'pedindo' || est === 'conectando') {
+            this.botaoVoz.setText('🎙  Conectando voz...').setStyle({ backgroundColor: '#00000088', color: '#ffd76b' });
+        } else if (!VozOnline.temMicrofone()) {
+            this.botaoVoz.setText('🎧  Só ouvindo').setStyle({ backgroundColor: '#00000066', color: '#cfe8ff' });
+        } else if (VozOnline.falando) {
+            this.botaoVoz.setText('🔴  FALANDO...').setStyle({ backgroundColor: '#c0392bcc', color: '#ffffff' });
+        } else {
+            this.botaoVoz.setText('🎙  Segure pra falar  (V)').setStyle({ backgroundColor: '#00000088', color: '#ffffff' });
+        }
+
+        if (this.botaoAlto) {
+            this.botaoAlto.setText(VozOnline.saidaMuda ? '🔇  Mudo' : '🔊  Ouvindo')
+                .setStyle({ color: VozOnline.saidaMuda ? '#e8a0a0' : '#cfe8ff' });
+        }
+
+        if (this.textoVoz) {
+            const outro = this.tampinhas ? this.tampinhas[this.meuIndice === 0 ? 1 : 0] : null;
+            const nomeOutro = outro ? outro.nome : 'o outro jogador';
+            if (VozOnline.outroFalando) {
+                this.textoVoz.setText('🔊  ' + nomeOutro + ' está falando').setVisible(true);
+            } else if (VozOnline.motivo) {
+                this.textoVoz.setText(VozOnline.motivo).setVisible(true);
+            } else {
+                this.textoVoz.setVisible(false);
+            }
+        }
+    }
+
     // ---------- rede: aplica jogadas e correções vindas do outro jogador/anfitrião ----------
     sairDoModoOnline() {
         if (!this.online) return;
@@ -913,6 +1016,9 @@ class GameScene extends Phaser.Scene {
             alvo.body.setVelocity(velX, velY);
             CapPhysics.onImpulse(alvo, Phaser.Math.Distance.Between(0, 0, velX, velY));
             SomFX.peteleco(alvo.pitchSom);
+            if (this.online && indice !== this.meuIndice) {
+                try { SomFX.jogadaDoOutro(); } catch (e) {}
+            }
             this.aguardandoParada = true;
             this.movimentoComecouEm = this.time.now;
         } catch (erro) {
