@@ -15,12 +15,16 @@ class ProdutoraScene extends Phaser.Scene {
     preload() {
         Carregando.acompanhar(this, 'Carregando...');
         this.load.video('videoProdutora', 'assets/video/produtora.mp4');
+        this.load.image('fundoMenu', 'assets/images/menu_bg.webp');
     }
 
     create() {
         this.transicaoEmAndamento = false;
 
-        this.add.rectangle(480, 270, 960, 540, 0x000000, 1);
+        // papel de parede do menu já no fundo desde a primeira tela (o "INICIAR"), em vez
+        // de um preto liso — um leve escurecido por cima só pra tampinha/texto se destacarem
+        this.add.image(480, 270, 'fundoMenu').setDisplaySize(960, 540);
+        this.add.rectangle(480, 270, 960, 540, 0x000000, 0.4);
 
         // vídeo criado mas parado — só começa a tocar depois do clique em "INICIAR"
         this.video = this.add.video(480, 270, 'videoProdutora');
@@ -59,60 +63,66 @@ class ProdutoraScene extends Phaser.Scene {
         } catch (e) { /* API indisponível nesse navegador — a rotação via CSS já resolve */ }
     }
 
+    // o botão "INICIAR" agora É uma tampinha girando (a mesma arte usada no resto do
+    // jogo, na cor da marca escolhida/padrão) — o texto fica fixo por cima, só a
+    // tampinha roda por baixo dele
     mostrarBotaoIniciar() {
-        const largura = 220;
-        const altura = 58;
+        const marcaAtual = MARCAS_DISPONIVEIS.find(m => m.nome === JogoState.marcaJogador) || MARCAS_DISPONIVEIS[0];
+        const chaveTampinha = criarTexturaTampinha(this, marcaAtual);
 
-        const placa = this.add.graphics();
-        placa.fillStyle(0x000000, 1);
-        placa.fillRoundedRect(-largura / 2, -altura / 2, largura, altura, 10);
-        placa.lineStyle(3, 0xffffff, 1);
-        placa.strokeRoundedRect(-largura / 2, -altura / 2, largura, altura, 10);
-        placa.lineStyle(1, 0xffffff, 0.25);
-        placa.lineBetween(-largura / 2 + 10, -8, largura / 2 - 10, -4);
-        placa.lineBetween(-largura / 2 + 10, 10, largura / 2 - 10, 14);
-        placa.fillStyle(0xffffff, 1);
-        [[-largura / 2 + 12, -altura / 2 + 10], [largura / 2 - 12, -altura / 2 + 10],
-         [-largura / 2 + 12, altura / 2 - 10], [largura / 2 - 12, altura / 2 - 10]].forEach(([px, py]) => {
-            placa.fillCircle(px, py, 2.5);
-        });
+        const tampinha = this.add.image(0, 0, chaveTampinha).setScale(2.7);
 
-        const rotulo = this.add.text(0, 0, '▶  INICIAR', {
-            fontSize: '26px',
+        const rotulo = this.add.text(0, 0, 'INICIAR', {
+            fontSize: '19px',
             fontFamily: (typeof FONTE_TITULO !== 'undefined' ? FONTE_TITULO : 'Arial'),
-            fontStyle: '600',
-            color: '#ffffff'
+            fontStyle: '700',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 5
         }).setOrigin(0.5);
 
-        const botao = this.add.container(480, 270, [placa, rotulo]).setAlpha(0);
-        botao.setSize(largura, altura);
+        const botao = this.add.container(480, 270, [tampinha, rotulo]).setAlpha(0);
+        botao.setSize(190, 190);
         botao.setInteractive({ useHandCursor: true });
 
-        let tweenBalanco = null;
+        // giro contínuo — a tampinha nunca para de rodar enquanto o jogador não clica
+        let tweenGiro = this.tweens.add({
+            targets: tampinha,
+            angle: 360,
+            duration: 3500,
+            repeat: -1
+        });
 
         botao.on('pointerover', () => {
             if (this.transicaoEmAndamento) return;
-            tweenBalanco = this.tweens.add({
-                targets: botao,
-                angle: { from: -2.5, to: 2.5 },
-                duration: 220,
-                yoyo: true,
-                repeat: -1,
-                ease: 'sine.inOut'
+            if (tweenGiro) tweenGiro.stop();
+            tweenGiro = this.tweens.add({
+                targets: tampinha,
+                angle: tampinha.angle + 360,
+                duration: 900,
+                repeat: -1
             });
+            this.tweens.add({ targets: botao, scale: 1.06, duration: 150 });
         });
 
         botao.on('pointerout', () => {
-            if (tweenBalanco) { tweenBalanco.stop(); tweenBalanco = null; }
-            this.tweens.add({ targets: botao, angle: 0, duration: 120 });
+            if (this.transicaoEmAndamento) return;
+            if (tweenGiro) tweenGiro.stop();
+            tweenGiro = this.tweens.add({
+                targets: tampinha,
+                angle: tampinha.angle + 360,
+                duration: 3500,
+                repeat: -1
+            });
+            this.tweens.add({ targets: botao, scale: 1, duration: 150 });
         });
 
         botao.on('pointerdown', () => {
             if (this.transicaoEmAndamento) return;
             this.transicaoEmAndamento = true;
-            if (tweenBalanco) { tweenBalanco.stop(); tweenBalanco = null; }
+            if (tweenGiro) tweenGiro.stop();
             botao.disableInteractive();
-            this.comecarVideo(botao);
+            this.comecarVideo(botao, tampinha);
         });
 
         this.botaoIniciar = botao;
@@ -120,8 +130,9 @@ class ProdutoraScene extends Phaser.Scene {
     }
 
     // esse clique é o primeiro (e único) gesto real do usuário na página — é aqui que o
-    // navegador libera tela cheia de verdade e som tocando sozinho
-    comecarVideo(botao) {
+    // navegador libera tela cheia de verdade e som tocando sozinho (e é por isso que a
+    // tela cheia + o travamento em paisagem acontecem exatamente aqui, dentro do clique)
+    comecarVideo(botao, tampinha) {
         if (this.scale.fullscreen.available && !this.scale.isFullscreen) {
             try {
                 this.scale.startFullscreen();
@@ -142,11 +153,20 @@ class ProdutoraScene extends Phaser.Scene {
         SomFX.iniciar();
         SomFX.peteleco();
 
+        // peteleco final: a tampinha dá um giro rápido antes de tudo desaparecer
+        this.tweens.add({
+            targets: tampinha,
+            angle: tampinha.angle + 720,
+            duration: 320,
+            ease: 'cubic.out'
+        });
+
         this.tweens.add({
             targets: botao,
             alpha: 0,
-            scale: 0.94,
-            duration: 250,
+            scale: 0.9,
+            duration: 300,
+            delay: 100,
             onComplete: () => botao.destroy()
         });
 
