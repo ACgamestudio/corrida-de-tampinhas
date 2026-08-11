@@ -55,9 +55,31 @@ class ProdutoraScene extends Phaser.Scene {
     // pede tela cheia de verdade (cobre até a barra de endereço do Chrome), usando o
     // Phaser como primeira opção e caindo pro Fullscreen API nativo direto no <html> se
     // o wrapper do Phaser não estiver disponível por algum motivo — assim a chance de
-    // funcionar é maior em mais navegadores/dispositivos diferentes
+    // funcionar é maior em mais navegadores/dispositivos diferentes. Só trava a
+    // orientação em paisagem DEPOIS que a tela cheia é de fato confirmada — pedir os
+    // dois ao mesmo tempo pode fazer o Chrome no Android recusar/cancelar a tela cheia
+    // no meio do processo.
     pedirTelaCheia() {
-        if (this.scale.isFullscreen) return;
+        if (this.scale.isFullscreen) {
+            this.travarPaisagem();
+            return;
+        }
+
+        let jaTravou = false;
+        const aoEntrarFullscreen = () => {
+            if (jaTravou) return;
+            jaTravou = true;
+            this.travarPaisagem();
+        };
+
+        this.scale.once('enterfullscreen', aoEntrarFullscreen);
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement) aoEntrarFullscreen();
+        }, { once: true });
+
+        // rede de segurança: se nenhum dos eventos acima disparar (navegador que não
+        // reporta esses eventos), trava a orientação de qualquer jeito depois de um tempo
+        this.time.delayedCall(600, aoEntrarFullscreen);
 
         const confirmar = () => {
             this.time.delayedCall(300, () => {
@@ -162,6 +184,15 @@ class ProdutoraScene extends Phaser.Scene {
 
         botao.on('pointerdown', () => {
             if (this.transicaoEmAndamento) return;
+            this.tweens.add({ targets: botao, scale: 0.94, duration: 80 });
+        });
+
+        // a AÇÃO (tela cheia + paisagem + vídeo) dispara no soltar o dedo/clique, não no
+        // tocar — no Chrome Android, pedir tela cheia dentro do "pointerup" é bem mais
+        // confiável do que dentro do "pointerdown" (o navegador trata isso como o gesto
+        // de ativação "de verdade", mais parecido com um clique nativo)
+        botao.on('pointerup', () => {
+            if (this.transicaoEmAndamento) return;
             this.transicaoEmAndamento = true;
             if (tweenGiro) tweenGiro.stop();
             botao.disableInteractive();
@@ -177,7 +208,6 @@ class ProdutoraScene extends Phaser.Scene {
     // tela cheia + o travamento em paisagem acontecem exatamente aqui, dentro do clique)
     comecarVideo(botao, tampinha) {
         this.pedirTelaCheia();
-        this.travarPaisagem();
 
         SomFX.iniciar();
         SomFX.peteleco();
