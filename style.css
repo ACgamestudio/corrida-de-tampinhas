@@ -3,6 +3,10 @@ html, body {
     padding: 0;
     width: 100%;
     height: 100%;
+    /* 100dvh acompanha a altura visível de verdade no mobile (sem contar a barra do
+       navegador quando ela está visível) — junto com o overflow:hidden, evita qualquer
+       sobra de espaço/scroll que faria a página não parecer "cheia" antes mesmo do clique */
+    height: 100dvh;
     background: #000;
     overflow: hidden;
 }
@@ -21,9 +25,9 @@ html, body {
 #game canvas {
     max-width: 100%;
     max-height: 100%;
+    /* sem borda/sombra: a ideia é o jogo ocupar a tela de ponta a ponta, sem parecer uma
+       "janelinha" flutuando no meio de uma moldura preta */
     display: block;
-    border: 2px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 0 30px rgba(0, 0, 0, 0.45);
 }
 
 /* -------- força paisagem no celular -------- */

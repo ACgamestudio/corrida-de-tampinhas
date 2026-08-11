@@ -52,6 +52,49 @@ class ProdutoraScene extends Phaser.Scene {
         this.mostrarBotaoIniciar();
     }
 
+    // pede tela cheia de verdade (cobre até a barra de endereço do Chrome), usando o
+    // Phaser como primeira opção e caindo pro Fullscreen API nativo direto no <html> se
+    // o wrapper do Phaser não estiver disponível por algum motivo — assim a chance de
+    // funcionar é maior em mais navegadores/dispositivos diferentes
+    pedirTelaCheia() {
+        if (this.scale.isFullscreen) return;
+
+        const confirmar = () => {
+            this.time.delayedCall(300, () => {
+                if (!this.scale.isFullscreen && !document.fullscreenElement) {
+                    console.warn('[Corrida de Tampinhas] Tela cheia não foi concedida pelo navegador. ' +
+                        'Isso costuma acontecer quando o jogo está dentro de um iframe sem allow="fullscreen" ' +
+                        '(ex.: em algumas plataformas de preview/embed) — fora desse caso, num navegador ' +
+                        'aberto direto (Chrome/Android, por ex.) a tela cheia real é concedida nesse clique. ' +
+                        'No iOS Safari o próprio sistema não permite site nenhum esconder a barra do navegador ' +
+                        '— só funciona depois de "Adicionar à Tela de Início" e abrir pelo ícone.');
+                }
+            });
+        };
+
+        if (this.scale.fullscreen.available) {
+            try {
+                this.scale.startFullscreen();
+                confirmar();
+                return;
+            } catch (e) {
+                console.warn('[Corrida de Tampinhas] Erro ao pedir tela cheia via Phaser:', e);
+            }
+        }
+
+        // fallback: Fullscreen API nativo, direto no documento inteiro
+        const el = document.documentElement;
+        const pedir = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+        if (pedir) {
+            try {
+                pedir.call(el);
+                confirmar();
+            } catch (e) {
+                console.warn('[Corrida de Tampinhas] Erro ao pedir tela cheia nativa:', e);
+            }
+        }
+    }
+
     // best-effort: nem todo navegador expõe/permite essa API (ex.: Safari iOS não tem);
     // por isso o try/catch e o .catch() na Promise — sem eles, um navegador que recusa
     // pararia a execução do resto do jogo com um erro no console
@@ -133,21 +176,7 @@ class ProdutoraScene extends Phaser.Scene {
     // navegador libera tela cheia de verdade e som tocando sozinho (e é por isso que a
     // tela cheia + o travamento em paisagem acontecem exatamente aqui, dentro do clique)
     comecarVideo(botao, tampinha) {
-        if (this.scale.fullscreen.available && !this.scale.isFullscreen) {
-            try {
-                this.scale.startFullscreen();
-                // dá pra checar depois se o navegador realmente aceitou, sem quebrar nada
-                // se ele recusar (ex.: fora de HTTPS, ou dentro de um iframe sem permissão)
-                this.time.delayedCall(300, () => {
-                    if (!this.scale.isFullscreen) {
-                        console.warn('[Corrida de Tampinhas] Tela cheia não foi concedida pelo navegador. ' +
-                            'Cheque se o jogo está rodando em HTTPS (ou localhost) e fora de um iframe sem allow="fullscreen".');
-                    }
-                });
-            } catch (e) {
-                console.warn('[Corrida de Tampinhas] Erro ao pedir tela cheia:', e);
-            }
-        }
+        this.pedirTelaCheia();
         this.travarPaisagem();
 
         SomFX.iniciar();

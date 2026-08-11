@@ -661,7 +661,10 @@ const config = {
     backgroundColor: "#8b8b8b",
     scale: {
         mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        // tela cheia pega a página inteira (<html>), não só a div do jogo — assim cobre
+        // 100% da tela e some com a barra de endereço do navegador de verdade
+        fullscreenTarget: document.documentElement
     },
     physics: {
         default: "arcade",
